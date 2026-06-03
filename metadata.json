@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Newspaper Ad Planner_V 2.0",
+  "description": "A professional newspaper advertisement dummy layout planning system with drag-and-drop, overlap collision detection, and PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
