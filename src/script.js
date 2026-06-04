@@ -297,7 +297,7 @@ function switchActiveLayout(newLayoutId) {
 }
 
 // Generic dynamic helper to execute custom prompt/confirm modals flawlessly in iframe scope
-function showCustomDialog({ title, message, isPrompt = false, defaultValue = '', inputLabel = 'Value', showDatePicker = false, defaultDateValue = '', confirmText = 'Confirm', cancelText = 'Cancel', theme = 'blue', onConfirm }) {
+function showCustomDialog({ title, message, isPrompt = false, defaultValue = '', inputLabel = 'Value', showDatePicker = false, defaultDateValue = '', showCentersPicker = false, defaultCentersValue = '', confirmText = 'Confirm', cancelText = 'Cancel', theme = 'blue', onConfirm }) {
   const modal = document.getElementById('general-dialog-modal');
   const titleEl = document.getElementById('dialog-title');
   const msgEl = document.getElementById('dialog-message');
@@ -306,6 +306,8 @@ function showCustomDialog({ title, message, isPrompt = false, defaultValue = '',
   const inputEl = document.getElementById('dialog-input');
   const dateContainer = document.getElementById('dialog-date-container');
   const dateInputEl = document.getElementById('dialog-date-input');
+  const centersContainer = document.getElementById('dialog-centers-container');
+  const centersInputEl = document.getElementById('dialog-centers-input');
   const btnCancel = document.getElementById('btn-dialog-cancel');
   const btnSubmit = document.getElementById('btn-dialog-submit');
   const iconBg = document.getElementById('dialog-icon-bg');
@@ -336,6 +338,14 @@ function showCustomDialog({ title, message, isPrompt = false, defaultValue = '',
     dateInputEl.value = defaultDateValue || new Date().toISOString().split('T')[0];
   } else if (dateContainer) {
     dateContainer.classList.add('hidden');
+  }
+
+  // Toggle centers selection input
+  if (showCentersPicker && centersContainer && centersInputEl) {
+    centersContainer.classList.remove('hidden');
+    centersInputEl.value = defaultCentersValue || '';
+  } else if (centersContainer) {
+    centersContainer.classList.add('hidden');
   }
 
   // Customize buttons text
@@ -369,8 +379,9 @@ function showCustomDialog({ title, message, isPrompt = false, defaultValue = '',
   btnSubmit.addEventListener('click', () => {
     const rawVal = inputEl.value;
     const dateVal = dateInputEl ? dateInputEl.value : '';
+    const centersVal = centersInputEl ? centersInputEl.value : '';
     cleanup();
-    if (onConfirm) onConfirm(rawVal, dateVal);
+    if (onConfirm) onConfirm(rawVal, dateVal, centersVal);
   });
 
   btnCancel.addEventListener('click', () => {
@@ -382,15 +393,17 @@ function showCustomDialog({ title, message, isPrompt = false, defaultValue = '',
 function createNewLayoutPrompt() {
   showCustomDialog({
     title: "Create alternative draft",
-    message: "Enter a descriptive name and choose a publication issue date for the new layout draft. It will start with exactly 1 empty page canvas.",
+    message: "Enter a descriptive name, choose a publication issue date, and specify publication center(s) for the new layout draft.",
     isPrompt: true,
     defaultValue: `Draft Layout ${state.layouts.length + 1}`,
     inputLabel: "Draft Layout Name",
     showDatePicker: true,
     defaultDateValue: new Date().toISOString().split('T')[0],
+    showCentersPicker: true,
+    defaultCentersValue: '',
     confirmText: "Create Layout",
     theme: "blue",
-    onConfirm: (typedName, selectedDate) => {
+    onConfirm: (typedName, selectedDate, typedCenters) => {
       const finalName = typedName.trim() || `Draft Layout ${state.layouts.length + 1}`;
       const finalDate = selectedDate || new Date().toISOString().split('T')[0];
       const newId = 'layout-' + Date.now();
@@ -406,6 +419,7 @@ function createNewLayoutPrompt() {
         id: newId,
         name: finalName,
         date: finalDate,
+        centers: typedCenters || '',
         pages: emptyPages
       };
       
@@ -456,9 +470,11 @@ function duplicateActiveLayoutPrompt() {
     inputLabel: "New Layout Name",
     showDatePicker: true,
     defaultDateValue: currentActive.date || new Date().toISOString().split('T')[0],
+    showCentersPicker: true,
+    defaultCentersValue: currentActive.centers || '',
     confirmText: "Duplicate",
     theme: "blue",
-    onConfirm: (typedName, selectedDate) => {
+    onConfirm: (typedName, selectedDate, typedCenters) => {
       const finalName = typedName.trim() || `${currentActive.name} (Copy)`;
       const finalDate = selectedDate || currentActive.date || new Date().toISOString().split('T')[0];
       const newId = 'layout-' + Date.now();
@@ -469,12 +485,13 @@ function duplicateActiveLayoutPrompt() {
         id: newId,
         name: finalName,
         date: finalDate,
+        centers: typedCenters || '',
         pages: duplicatedPages
       };
       
       state.layouts.push(newLayout);
       switchActiveLayout(newId);
-      showToast(`Duplicated layout into "${finalName}" with issue date ${finalDate} successfully`, "success");
+      showToast(`Duplicated layout into "${finalName}" successfully`, "success");
     }
   });
 }
@@ -650,6 +667,12 @@ function renderAllLayouts() {
     dashboardIssueDateEl.value = activeL.date || '';
   }
 
+  // Update dashboard centers input element
+  const dashboardCentersInputEl = document.getElementById('dashboard-centers-input');
+  if (dashboardCentersInputEl && activeL) {
+    dashboardCentersInputEl.value = activeL.centers || '';
+  }
+
   if (badgePageCount) badgePageCount.textContent = totalPages + " " + (totalPages === 1 ? "Page" : "Pages");
 
   if (totalPages === 0) {
@@ -767,15 +790,20 @@ function renderAllLayouts() {
       `;
     }
 
+    const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
+
     pageCard.innerHTML = `
       <!-- Card Title -->
       <div class="flex items-center justify-between mb-2">
-        <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">Page ${page.pageNumber}</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">Page ${page.pageNumber}</span>
+          <span class="text-[9px] font-bold px-1 py-0.5 rounded ${pagePosition === 'LEFT' ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-purple-50 text-purple-600 border border-purple-200'}">${pagePosition}</span>
+        </div>
         <span class="text-[10px] font-mono font-bold text-slate-500 bg-slate-100/60 px-1.5 py-0.5 rounded border border-slate-200/40">Broad Sheet</span>
       </div>
 
       <!-- Thumbnail Wrapper with hover editors overlays -->
-      <div class="relative mx-auto rounded bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center shadow-inner mb-3 cursor-pointer group-hover:shadow-blue-500/5 transition-shadow" style="width: 180px; height: 287px;" onclick="openPageEditor('${page.id}')">
+      <div class="relative mx-auto rounded bg-slate-50 border border-slate-200 overflow-hidden flex flex-col items-center justify-end pb-3 shadow-inner mb-3 cursor-pointer group-hover:shadow-blue-500/5 transition-shadow" style="width: 180px; height: 287px;" onclick="openPageEditor('${page.id}')">
         <!-- Perfectly-centered crisp thumbnail with visible borders on all sides -->
         <div class="relative border border-slate-950 bg-white overflow-hidden shadow-md" style="width: ${thumbW}px; height: ${thumbH}px;">
           <!-- 8-Column dashed guidelines -->
@@ -989,6 +1017,9 @@ function openPageSettings(pageId) {
   const idInput = document.getElementById('form-page-id');
   if (idInput) idInput.value = targetId;
 
+  const positionInput = document.getElementById('form-page-position');
+  if (positionInput) positionInput.value = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
+
   const widthInput = document.getElementById('form-page-width');
   if (widthInput) widthInput.value = page.width || 329;
 
@@ -1016,6 +1047,7 @@ function handlePageSettingsFormSubmit(e) {
   const page = state.pages.find(p => p.id === pageId);
   if (!page) return;
 
+  const position = document.getElementById('form-page-position').value;
   const width = parseInt(document.getElementById('form-page-width').value, 10);
   const height = parseInt(document.getElementById('form-page-height').value, 10);
   const comments = document.getElementById('form-page-comments').value;
@@ -1029,14 +1061,27 @@ function handlePageSettingsFormSubmit(e) {
     return;
   }
 
-  // Check if any existing ads exceed the new dimensions
-  const exceedingAds = page.ads.filter(ad => (ad.x + ad.width > width) || (ad.y + ad.height > height));
+  // Check if any existing ads exceed the new dimensions considering bottom alignment
+  const oldHeight = page.height || 525;
+  const deltaHeight = height - oldHeight;
+
+  const exceedingAds = page.ads.filter(ad => {
+    const newY = ad.y + deltaHeight;
+    return (ad.x < 0) || (ad.x + ad.width > width) || (newY < 0) || (newY + ad.height > height);
+  });
+
   if (exceedingAds.length > 0) {
-    showToast(`Cannot resize: ${exceedingAds.length} existing ad placement(s) would exceed the page boundaries!`, "error");
+    showToast(`Cannot resize: ${exceedingAds.length} existing ad placement(s) would exceed boundaries!`, "error");
     return;
   }
 
+  // Shift ads vertically to remain aligned with the page bottom
+  page.ads.forEach(ad => {
+    ad.y = ad.y + deltaHeight;
+  });
+
   // Save changes
+  page.position = position;
   page.width = width;
   page.height = height;
   page.comments = comments;
@@ -1063,7 +1108,8 @@ function renderActiveEditorBoard() {
   const pageTitle = document.getElementById('lbl-active-page-title');
   const pageStats = document.getElementById('lbl-active-page-stats');
   
-  if (pageTitle) pageTitle.textContent = `PAGE ${page.pageNumber} LAYOUT EDITOR`;
+  const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
+  if (pageTitle) pageTitle.textContent = `PAGE ${page.pageNumber} (${pagePosition}) LAYOUT EDITOR`;
   
   const pageW = page.width || 329;
   const pageH = page.height || 525;
@@ -2429,6 +2475,22 @@ function setupEventListeners() {
     });
   }
 
+  const dashboardCentersInput = document.getElementById('dashboard-centers-input');
+  if (dashboardCentersInput) {
+    dashboardCentersInput.addEventListener('change', (e) => {
+      const activeL = state.layouts.find(l => l.id === state.activeLayoutId);
+      if (activeL) {
+        const oldCenters = activeL.centers;
+        const newCenters = e.target.value;
+        if (oldCenters !== newCenters) {
+          activeL.centers = newCenters;
+          saveLayoutsToLocalStorageSilently();
+          showToast(`Publication center(s) updated to "${newCenters}" successfully!`, "success");
+        }
+      }
+    });
+  }
+
 
 
   const btnNewLayout = document.getElementById('btn-new-layout');
@@ -2596,6 +2658,7 @@ async function triggerPageReportPDFExport() {
     const currentLayout = activeL;
     const layoutDateFormatted = getFormattedLayoutDate(activeL?.date);
     const layoutDateFormattedVal = layoutDateFormatted;
+    const centersFormatted = escapeHtml(activeL?.centers || '');
 
     const totalPageAreaMm2Pdf = state.pages.reduce((acc, p) => acc + (p.width || 329) * (p.height || 525), 0);
     const totalVolumeSqcmPdf = totalPageAreaMm2Pdf / 100;
@@ -2621,10 +2684,11 @@ async function triggerPageReportPDFExport() {
     // Gather all tabular rows first so we know how many tabular pages there will be!
     const tableRows = [];
     state.pages.forEach(page => {
+      const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
       tableRows.push(`
         <tr style="background-color: #eff6ff; border-bottom: 1.5px solid #cbd5e1;">
           <td colspan="6" style="padding: 4px 10px; color: #dc2626; font-weight: 800; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px;">
-            PAGE - ${page.pageNumber}
+            PAGE - ${page.pageNumber} (${pagePosition})
           </td>
         </tr>
       `);
@@ -2730,6 +2794,7 @@ async function triggerPageReportPDFExport() {
             <h1 style="font-size: 18px; font-weight: 800; text-transform: uppercase; margin: 0; color: #0f172a; letter-spacing: -0.5px;"><span style="color: #991b1b;">${escapeHtml(activeL?.name || 'Default Layout')}</span> DUMMY LAYOUT${sheetTitleSuffix}</h1>
             <div style="margin-top: 3px; display: flex; align-items: center; font-family: 'Inter', system-ui, sans-serif;">
               <span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px;">ISSUE DATE: <span style="color: #166534;">${layoutDateFormatted}</span></span>
+              ${centersFormatted ? `<span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px; margin-left: 14px; border-left: 1px solid #cbd5e1; padding-left: 14px;">CENTERS: <span style="color: #c2410c;">${centersFormatted}</span></span>` : ''}
             </div>
           </div>
           <div style="text-align: right; font-family: 'Inter', system-ui, sans-serif; font-size: 9px; color: #475569; line-height: 1.4;">
@@ -2795,11 +2860,16 @@ async function triggerPageReportPDFExport() {
 
         const fillPercent = calculatePageFillPercentage(page.id);
 
+        const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
+        const posColor = pagePosition === 'LEFT' ? '#4338ca' : '#7e22ce'; // indigo-700 / purple-700
+
         overviewHtml += `
           <div style="background-color: #fafbfb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 6px; display: flex; flex-direction: column; align-items: center; width: 90px; box-sizing: border-box;">
-            <span style="font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 8.5px; font-weight: bold; color: #1e293b; display: block; margin-bottom: 1px;">PAGE ${page.pageNumber}</span>
+            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+              <span style="font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 8.5px; font-weight: bold; color: #1e293b; display: block;">PAGE ${page.pageNumber}</span>
+              <span style="font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 6.5px; font-weight: bold; color: ${posColor}; background-color: #f1f5f9; padding: 1px 3px; border-radius: 3px; border: 1px solid #e2e8f0;">${pagePosition}</span>
+            </div>
             <span style="font-family: 'JetBrains Mono', monospace; font-size: 6.5px; color: #64748b; margin-bottom: 2px; font-weight: 500;">${pageW} &times; ${pageH} mm</span>
-            <span style="background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; font-family: 'JetBrains Mono', monospace; font-size: 6px; font-weight: 700; padding: 1px 3px; border-radius: 3px; margin-bottom: 2px; text-align: center;">${((pageW * pageH) / 100).toLocaleString(undefined, { maximumFractionDigits: 1 })} Sqcm</span>
             
             <div style="display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; height: ${maxThumbH}px; margin-bottom: 4px; background: transparent;">
               <div style="position: relative; width: ${thumbW}px; height: ${thumbH}px; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05)">
@@ -2867,6 +2937,7 @@ async function triggerPageReportPDFExport() {
             <h1 style="font-size: 16px; font-weight: 800; text-transform: uppercase; margin: 0; color: #0f172a; letter-spacing: -0.5px;"><span style="color: #991b1b;">${escapeHtml(currentLayout?.name || 'Default Layout')}</span> DUMMY LAYOUT AD INDEX${tabTitleSuffix}</h1>
             <div style="margin-top: 3px; display: flex; align-items: center; font-family: 'Inter', system-ui, sans-serif;">
               <span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px;">ISSUE DATE: <span style="color: #166534;">${layoutDateFormattedVal}</span></span>
+              ${centersFormatted ? `<span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px; margin-left: 14px; border-left: 1px solid #cbd5e1; padding-left: 14px;">CENTERS: <span style="color: #c2410c;">${centersFormatted}</span></span>` : ''}
             </div>
           </div>
           <div style="text-align: right; font-family: 'Inter', system-ui, sans-serif; font-size: 9px; color: #475569; line-height: 1.4;">
