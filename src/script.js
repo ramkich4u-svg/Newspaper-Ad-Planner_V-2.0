@@ -771,11 +771,11 @@ function renderAllLayouts() {
       page.ads.forEach(ad => {
         let catColor = '#3b82f6';
         let catText = 'Retail';
-        if (ad.category === 'classified') { catColor = '#10b981'; catText = 'Classifieds'; }
+        if (ad.category === 'classified') { catColor = '#10b981'; catText = 'Health Care'; }
         if (ad.category === 'editorial') { catColor = '#f59e0b'; catText = 'Real Estate'; }
         if (ad.category === 'political') { catColor = '#f43f5e'; catText = 'Education'; }
         if (ad.category === 'finance') { catColor = '#6366f1'; catText = 'B2B'; }
-        if (ad.category === 'special') { catColor = '#8b5cf6'; catText = 'Government'; }
+        if (ad.category === 'special') { catColor = '#8b5cf6'; catText = ad.customCategoryName || 'Others'; }
 
         let pageOptions = state.pages.map(p => {
           if (p.id === page.id) return '';
@@ -1184,11 +1184,11 @@ function renderActiveEditorBoard() {
   page.ads.forEach(ad => {
     // Determine category details
     let catHeadline = 'Retail';
-    if (ad.category === 'classified') catHeadline = 'Classifieds';
+    if (ad.category === 'classified') catHeadline = 'Health Care';
     if (ad.category === 'editorial') catHeadline = 'Real Estate';
     if (ad.category === 'political') catHeadline = 'Education';
     if (ad.category === 'finance') catHeadline = 'B2B';
-    if (ad.category === 'special') catHeadline = 'Government';
+    if (ad.category === 'special') catHeadline = ad.customCategoryName || 'Others';
 
     adsHtml += `
       <div id="${ad.id}" 
@@ -2067,6 +2067,9 @@ function triggerEmptySpaceClickForm(mmX, mmY) {
   document.getElementById('form-client-name').value = '';
   const revenueInput = document.getElementById('form-ad-revenue');
   if (revenueInput) revenueInput.value = '';
+  
+  const customInput = document.getElementById('form-custom-category');
+  if (customInput) customInput.value = '';
 
   // Standard category
   selectCategoryThemeRadio('retail');
@@ -2094,6 +2097,8 @@ function loadFormAdConfigure(adId) {
   if (revenueInput2) {
     revenueInput2.value = ad.revenue !== undefined ? ad.revenue : 0;
   }
+  const customInput2 = document.getElementById('form-custom-category');
+  if (customInput2) customInput2.value = ad.customCategoryName || '';
 
   // Set category selector radio visually up to match
   selectCategoryThemeRadio(ad.category || 'retail');
@@ -2108,6 +2113,15 @@ function loadFormAdConfigure(adId) {
 
 // Helpers category highlight radios selector
 function selectCategoryThemeRadio(catVal) {
+  const customContainer = document.getElementById('custom-category-container');
+  if (customContainer) {
+    if (catVal === 'special') {
+      customContainer.classList.remove('hidden');
+    } else {
+      customContainer.classList.add('hidden');
+    }
+  }
+
   const rGroup = document.querySelectorAll('input[name="form-cat"]');
   rGroup.forEach(radio => {
     const isMatched = radio.value === catVal;
@@ -2140,6 +2154,8 @@ function handleFormAdSubmission(e) {
   
   const selectedRadio = document.querySelector('input[name="form-cat"]:checked');
   const catTheme = selectedRadio ? selectedRadio.value : 'retail';
+  const customCatInput = document.getElementById('form-custom-category');
+  const customCategoryName = customCatInput ? customCatInput.value.trim() : '';
 
   const page = state.pages.find(p => p.id === state.activePageId);
   if (!page) return;
@@ -2193,6 +2209,7 @@ function handleFormAdSubmission(e) {
       adObj.x = placementXFinal;
       adObj.y = placementYFinal;
       adObj.category = catTheme;
+      adObj.customCategoryName = customCategoryName;
       adObj.revenue = revenueVal;
       
       commitHistory();
@@ -2208,6 +2225,7 @@ function handleFormAdSubmission(e) {
       width: reqW,
       height: reqH,
       category: catTheme,
+      customCategoryName: customCategoryName,
       revenue: revenueVal
     };
 
@@ -2675,7 +2693,7 @@ async function triggerPageReportPDFExport() {
       const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
       tableRows.push(`
         <tr style="background-color: #eff6ff; border-bottom: 1.5px solid #cbd5e1;">
-          <td colspan="6" style="padding: 4px 10px; color: #dc2626; font-weight: 800; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+          <td colspan="6" style="padding: 4px 10px; color: #dc2626; font-weight: 800; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px;">
             PAGE - ${page.pageNumber} (${pagePosition})
           </td>
         </tr>
@@ -2684,39 +2702,39 @@ async function triggerPageReportPDFExport() {
       if (page.ads.length === 0) {
         tableRows.push(`
           <tr style="border-bottom: 1.5px solid #cbd5e1; background-color: #ffffff;">
-            <td style="padding: 4px 10px; text-align: center; color: #94a3b8; border-right: 1px solid #cbd5e1; font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: bold; font-size: 9px;">
+            <td style="padding: 4px 10px; text-align: center; color: #94a3b8; border-right: 1px solid #cbd5e1; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: bold; font-size: 9px;">
               -
             </td>
-            <td colspan="5" style="padding: 4px 10px; font-style: italic; color: #94a3b8; text-align: center; font-family: 'Inter', system-ui, sans-serif; font-size: 9px;">No Advertisements scheduled on this page</td>
+            <td colspan="5" style="padding: 4px 10px; font-style: italic; color: #94a3b8; text-align: center; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px;">No Advertisements scheduled on this page</td>
           </tr>
         `);
       } else {
         page.ads.forEach((ad, idx) => {
           let categoryLabel = 'Retail';
-          if (ad.category === 'classified') categoryLabel = 'Classifieds';
+          if (ad.category === 'classified') categoryLabel = 'Health Care';
           if (ad.category === 'editorial') categoryLabel = 'Real Estate';
           if (ad.category === 'political') categoryLabel = 'Education';
           if (ad.category === 'finance') categoryLabel = 'B2B';
-          if (ad.category === 'special') categoryLabel = 'Government';
+          if (ad.category === 'special') categoryLabel = ad.customCategoryName || 'Others';
 
           const singleAdVolume = (ad.width * ad.height) / 100;
           const adRevenueDisplay = ad.revenue ? `${ad.revenue.toLocaleString()}` : '0';
 
           tableRows.push(`
             <tr style="border-bottom: 1px solid #cbd5e1; background-color: #ffffff;">
-              <td style="padding: 4px 10px; text-align: center; color: #0f172a; font-weight: bold; border-right: 1px solid #cbd5e1; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 9px;">
+              <td style="padding: 4px 10px; text-align: center; color: #0f172a; font-weight: bold; border-right: 1px solid #cbd5e1; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px;">
                 ${idx + 1}
               </td>
-              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; font-weight: 600; color: #0f172a; font-size: 9px; font-family: 'Inter', sans-serif;">
+              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; font-weight: 600; color: #0f172a; font-size: 9px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
                 ${escapeHtml(ad.client)}
               </td>
-              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: 'JetBrains Mono', monospace; font-weight: 500; color: #334155; font-size: 8.5px;">
+              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-weight: 500; color: #334155; font-size: 8.5px;">
                 ${ad.width} x ${ad.height} mm
               </td>
-              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #1e40af; font-size: 8.5px;">
+              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-weight: bold; color: #1e40af; font-size: 8.5px;">
                 ${singleAdVolume.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Sqcm
               </td>
-              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #15803d; font-size: 8.5px;">
+              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-weight: bold; color: #15803d; font-size: 8.5px;">
                 ${adRevenueDisplay}
               </td>
               <td style="padding: 4px 10px; text-align: center; color: #475569; font-weight: 500; font-size: 8.5px;">
@@ -2777,21 +2795,21 @@ async function triggerPageReportPDFExport() {
 
       let overviewHtml = `
         <!-- Title Header Block -->
-        <div style="border-bottom: 2px solid #334155; padding-bottom: 6px; margin-bottom: 10px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: 'Space Grotesk', system-ui, sans-serif;">
+        <div style="border-bottom: 2px solid #334155; padding-bottom: 6px; margin-bottom: 10px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           <div>
             <h1 style="font-size: 18px; font-weight: 800; text-transform: uppercase; margin: 0; color: #0f172a; letter-spacing: -0.5px;"><span style="color: #991b1b;">${escapeHtml(activeL?.name || 'Default Layout')}</span> DUMMY LAYOUT${sheetTitleSuffix}</h1>
-            <div style="margin-top: 3px; display: flex; align-items: center; font-family: 'Inter', system-ui, sans-serif;">
+            <div style="margin-top: 3px; display: flex; align-items: center; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
               <span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px;">ISSUE DATE: <span style="color: #166534;">${layoutDateFormatted}</span></span>
               ${centersFormatted ? `<span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px; margin-left: 14px; border-left: 1px solid #cbd5e1; padding-left: 14px;">CENTERS: <span style="color: #c2410c;">${centersFormatted}</span></span>` : ''}
             </div>
           </div>
-          <div style="text-align: right; font-family: 'Inter', system-ui, sans-serif; font-size: 9px; color: #475569; line-height: 1.4;">
+          <div style="text-align: right; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px; color: #475569; line-height: 1.4;">
             <strong>Printed:</strong> <span style="font-weight: 700;">${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
           </div>
         </div>
         
         <!-- Stats Brief Panel -->
-        <div style="display: flex; gap: 15px; background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; font-family: 'Inter', system-ui, sans-serif; font-size: 9px;">
+        <div style="display: flex; gap: 15px; background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px;">
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1; padding-left: 5px;">
             <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700;">Total Pagination Pages</span>
             <span style="font-size: 14px; font-weight: 800; color: #0f172a;">${state.pages.length} Pages</span>
@@ -2836,10 +2854,10 @@ async function triggerPageReportPDFExport() {
         page.ads.forEach(ad => {
           miniAds += `
             <div style="position: absolute; left: ${ad.x * scaleX}px; top: ${ad.y * scaleY}px; width: ${ad.width * scaleX}px; height: ${ad.height * scaleY}px; background-color: #f8fafc; border: 0.75px solid #cbd5e1; border-radius: 2px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; padding: 2px; text-align: center; line-height: 1.15; z-index: 5;">
-              <span style="font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif; font-size: 5.5px; font-weight: 800; color: #1e293b; max-width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 5.5px; font-weight: 800; color: #1e293b; max-width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 ${escapeHtml(ad.client)}
               </span>
-              <span style="font-family: 'JetBrains Mono', monospace; font-size: 4.5px; font-weight: 700; color: #64748b; display: block; margin-top: 1px; white-space: nowrap;">
+              <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 4.5px; font-weight: 700; color: #64748b; display: block; margin-top: 1px; white-space: nowrap;">
                 ${ad.width}x${ad.height}
               </span>
             </div>
@@ -2854,10 +2872,10 @@ async function triggerPageReportPDFExport() {
         overviewHtml += `
           <div style="background-color: #fafbfb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 6px; display: flex; flex-direction: column; align-items: center; width: 90px; box-sizing: border-box;">
             <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
-              <span style="font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 8.5px; font-weight: bold; color: #1e293b; display: block;">PAGE ${page.pageNumber}</span>
-              <span style="font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 6.5px; font-weight: bold; color: ${posColor}; background-color: #f1f5f9; padding: 1px 3px; border-radius: 3px; border: 1px solid #e2e8f0;">${pagePosition}</span>
+              <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 8.5px; font-weight: bold; color: #1e293b; display: block;">PAGE ${page.pageNumber}</span>
+              <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 6.5px; font-weight: bold; color: ${posColor}; background-color: #f1f5f9; padding: 1px 3px; border-radius: 3px; border: 1px solid #e2e8f0;">${pagePosition}</span>
             </div>
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 6.5px; color: #64748b; margin-bottom: 2px; font-weight: 500;">${pageW} &times; ${pageH} mm</span>
+            <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 6.5px; color: #64748b; margin-bottom: 2px; font-weight: 500;">${pageW} &times; ${pageH} mm</span>
             
             <div style="display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; height: ${maxThumbH}px; margin-bottom: 4px; background: transparent;">
               <div style="position: relative; width: ${thumbW}px; height: ${thumbH}px; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05)">
@@ -2866,7 +2884,7 @@ async function triggerPageReportPDFExport() {
               </div>
             </div>
             
-            <div style="width: 100%; display: flex; justify-content: space-between; font-family: 'Inter', system-ui, sans-serif; font-size: 7.5px; color: #475569; margin-top: 3px; box-sizing: border-box; line-height: 1;">
+            <div style="width: 100%; display: flex; justify-content: space-between; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 7.5px; color: #475569; margin-top: 3px; box-sizing: border-box; line-height: 1;">
               <span>${page.ads.length} Advt</span>
               <span style="font-weight: bold; color: ${fillPercent > 70 ? '#e11d48' : fillPercent > 40 ? '#d97706' : '#2563eb'}">${fillPercent}%</span>
             </div>
@@ -2878,7 +2896,7 @@ async function triggerPageReportPDFExport() {
         </div>
 
         <!-- Page Footer -->
-        <div style="position: absolute; bottom: 12px; left: 32px; right: 32px; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; font-family: 'Inter', system-ui, sans-serif; font-size: 8.5px; color: #94a3b8; box-sizing: border-box;">
+        <div style="position: absolute; bottom: 12px; left: 32px; right: 32px; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 8.5px; color: #94a3b8; box-sizing: border-box;">
           <span>Draft Flatplan Index Matrix &bull; Horizontal A4 White Edition</span>
           <span>Page ${sheetNum} of ${totalPdfSheets}</span>
         </div>
@@ -2920,24 +2938,24 @@ async function triggerPageReportPDFExport() {
 
       let detailsHtml = `
         <!-- Title Header Block -->
-        <div style="border-bottom: 2px solid #334155; padding-bottom: 6px; margin-bottom: 10px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: 'Space Grotesk', system-ui, sans-serif;">
+        <div style="border-bottom: 2px solid #334155; padding-bottom: 6px; margin-bottom: 10px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           <div>
             <h1 style="font-size: 16px; font-weight: 800; text-transform: uppercase; margin: 0; color: #0f172a; letter-spacing: -0.5px;"><span style="color: #991b1b;">${escapeHtml(currentLayout?.name || 'Default Layout')}</span> DUMMY LAYOUT AD INDEX${tabTitleSuffix}</h1>
-            <div style="margin-top: 3px; display: flex; align-items: center; font-family: 'Inter', system-ui, sans-serif;">
+            <div style="margin-top: 3px; display: flex; align-items: center; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
               <span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px;">ISSUE DATE: <span style="color: #166534;">${layoutDateFormattedVal}</span></span>
               ${centersFormatted ? `<span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px; margin-left: 14px; border-left: 1px solid #cbd5e1; padding-left: 14px;">CENTERS: <span style="color: #c2410c;">${centersFormatted}</span></span>` : ''}
             </div>
           </div>
-          <div style="text-align: right; font-family: 'Inter', system-ui, sans-serif; font-size: 9px; color: #475569; line-height: 1.4;">
+          <div style="text-align: right; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px; color: #475569; line-height: 1.4;">
             <strong>Printed:</strong> <span style="font-weight: 700;">${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
           </div>
         </div>
 
         <!-- Schedule Table list -->
         <div style="flex-grow: 1; overflow-y: auto; padding-right: 5px; width: 100%;">
-          <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: 'Inter', system-ui, sans-serif; font-size: 9px; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; box-sizing: border-box;">
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; box-sizing: border-box;">
             <thead>
-              <tr style="background-color: #dbeafe; color: #1e3a8a; font-weight: 800; border-bottom: 1.5px solid #cbd5e1; font-family: 'Space Grotesk', system-ui, sans-serif;">
+              <tr style="background-color: #dbeafe; color: #1e3a8a; font-weight: 800; border-bottom: 1.5px solid #cbd5e1; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
                 <th style="padding: 5px 10px; width: 110px; border-right: 1px solid #cbd5e1; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">PAGE NUMBER</th>
                 <th style="padding: 5px 10px; border-right: 1px solid #cbd5e1; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">CLIENT NAME</th>
                 <th style="padding: 5px 10px; text-align: center; border-right: 1px solid #cbd5e1; width: 120px; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">SIZE (W x H)</th>
@@ -2954,28 +2972,28 @@ async function triggerPageReportPDFExport() {
 
         ${tabIdx === totalTabularSheets - 1 ? `
         <!-- Totals Summary Box -->
-        <div style="margin-top: 14px; margin-bottom: 12px; display: flex; gap: 16px; background-color: #fafbfb; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 12px; font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box;">
+        <div style="margin-top: 14px; margin-bottom: 12px; display: flex; gap: 16px; background-color: #fafbfb; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 12px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; box-sizing: border-box;">
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1; padding-left: 4px;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', system-ui, sans-serif; tracking-wider: 0.5px;">Total Ad Volume</span>
-            <span style="font-size: 15px; font-weight: 800; color: #4f46e5; font-family: 'Space Grotesk', system-ui, sans-serif;">${sumTotalAdVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
+            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; tracking-wider: 0.5px;">Total Ad Volume</span>
+            <span style="font-size: 15px; font-weight: 800; color: #4f46e5; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${sumTotalAdVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', system-ui, sans-serif; tracking-wider: 0.5px;">Total Edit Volume</span>
-            <span style="font-size: 15px; font-weight: 800; color: #d97706; font-family: 'Space Grotesk', system-ui, sans-serif;">${sumTotalEditVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
+            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; tracking-wider: 0.5px;">Total Edit Volume</span>
+            <span style="font-size: 15px; font-weight: 800; color: #d97706; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${sumTotalEditVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', system-ui, sans-serif; tracking-wider: 0.5px;">Total Page Space (Advt + Edit)</span>
-            <span style="font-size: 15px; font-weight: 800; color: #2563eb; font-family: 'Space Grotesk', system-ui, sans-serif;">${(sumTotalPageAreaMm2 / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
+            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; tracking-wider: 0.5px;">Total Page Space (Advt + Edit)</span>
+            <span style="font-size: 15px; font-weight: 800; color: #2563eb; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${(sumTotalPageAreaMm2 / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', system-ui, sans-serif; tracking-wider: 0.5px;">Feature Revenue</span>
-            <span style="font-size: 15px; font-weight: 800; color: #059669; font-family: 'Space Grotesk', system-ui, sans-serif;">₹${sumTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}</span>
+            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; tracking-wider: 0.5px;">Feature Revenue</span>
+            <span style="font-size: 15px; font-weight: 800; color: #059669; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">₹${sumTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}</span>
           </div>
         </div>
         ` : ''}
 
         <!-- Page 2 Footer -->
-        <div style="position: absolute; bottom: 12px; left: 32px; right: 32px; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; font-family: 'Inter', system-ui, sans-serif; font-size: 8.5px; color: #94a3b8; box-sizing: border-box;">
+        <div style="position: absolute; bottom: 12px; left: 32px; right: 32px; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 8.5px; color: #94a3b8; box-sizing: border-box;">
           <span>Page-wise Schedules Table listings index &bull; Parameter Specs only</span>
           <span>Page ${sheetNum} of ${totalPdfSheets}</span>
         </div>
