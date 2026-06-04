@@ -436,20 +436,28 @@ function renameActiveLayoutPrompt() {
   if (!currentActive) return;
 
   showCustomDialog({
-    title: "Rename Layout",
-    message: `Provide a new name for the active layout draft "${currentActive.name}":`,
+    title: "Rename / Edit Layout Details",
+    message: `Provide a new name, issue date, or publication centers for the active layout draft "${currentActive.name}":`,
     isPrompt: true,
     defaultValue: currentActive.name,
     inputLabel: "Layout Name",
-    confirmText: "Save Name",
+    showDatePicker: true,
+    defaultDateValue: currentActive.date || '',
+    showCentersPicker: true,
+    defaultCentersValue: currentActive.centers || '',
+    confirmText: "Save Details",
     theme: "blue",
-    onConfirm: (typedName) => {
+    onConfirm: (typedName, typedDate, typedCenters) => {
       const finalName = typedName.trim();
       if (!finalName) return;
       currentActive.name = finalName;
+      if (typedDate !== undefined) currentActive.date = typedDate;
+      if (typedCenters !== undefined) currentActive.centers = typedCenters;
+      
       saveLayoutsToLocalStorageSilently();
       renderLayoutSelectorDropdown();
-      showToast(`Renamed layout draft to "${finalName}"`, "success");
+      renderAllLayouts();
+      showToast(`Layout details for "${finalName}" saved successfully.`, "success");
     }
   });
 }
@@ -612,6 +620,9 @@ function renderAllLayouts() {
   const totalEditVolumeEl = document.getElementById('stat-total-edit-volume');
   const totalVolumeEl = document.getElementById('stat-total-volume');
   const badgePageCount = document.getElementById('badge-page-count');
+  const badgeLayoutName = document.getElementById('badge-layout-name');
+  const badgeLayoutDate = document.getElementById('badge-layout-date');
+  const badgeLayoutCenters = document.getElementById('badge-layout-centers');
 
   if (!grid) return;
 
@@ -660,20 +671,31 @@ function renderAllLayouts() {
     totalVolumeEl.textContent = totalVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " Sqcm";
   }
   
-  // Update dashboard issue date input element
-  const activeL = state.layouts.find(l => l.id === state.activeLayoutId);
-  const dashboardIssueDateEl = document.getElementById('dashboard-issue-date');
-  if (dashboardIssueDateEl && activeL) {
-    dashboardIssueDateEl.value = activeL.date || '';
-  }
-
-  // Update dashboard centers input element
-  const dashboardCentersInputEl = document.getElementById('dashboard-centers-input');
-  if (dashboardCentersInputEl && activeL) {
-    dashboardCentersInputEl.value = activeL.centers || '';
-  }
-
   if (badgePageCount) badgePageCount.textContent = totalPages + " " + (totalPages === 1 ? "Page" : "Pages");
+
+  const activeL = state.layouts.find(l => l.id === state.activeLayoutId);
+  if (activeL) {
+    if (badgeLayoutName) {
+      badgeLayoutName.textContent = activeL.name;
+      badgeLayoutName.classList.remove('hidden');
+    }
+    if (badgeLayoutDate) {
+      if (activeL.date && activeL.date.trim() !== '') {
+        badgeLayoutDate.textContent = getFormattedLayoutDate(activeL.date);
+        badgeLayoutDate.classList.remove('hidden');
+      } else {
+        badgeLayoutDate.classList.add('hidden');
+      }
+    }
+    if (badgeLayoutCenters) {
+      if (activeL.centers && activeL.centers.trim() !== '') {
+        badgeLayoutCenters.textContent = "Centers: " + activeL.centers;
+        badgeLayoutCenters.classList.remove('hidden');
+      } else {
+        badgeLayoutCenters.classList.add('hidden');
+      }
+    }
+  }
 
   if (totalPages === 0) {
     grid.innerHTML = '';
@@ -2458,40 +2480,6 @@ function setupEventListeners() {
       switchActiveLayout(e.target.value);
     });
   }
-
-  const dashboardIssueDate = document.getElementById('dashboard-issue-date');
-  if (dashboardIssueDate) {
-    dashboardIssueDate.addEventListener('change', (e) => {
-      const activeL = state.layouts.find(l => l.id === state.activeLayoutId);
-      if (activeL) {
-        const oldDate = activeL.date;
-        const newDate = e.target.value;
-        if (newDate && oldDate !== newDate) {
-          activeL.date = newDate;
-          saveLayoutsToLocalStorageSilently();
-          showToast(`Issue date updated to ${getFormattedLayoutDate(newDate)} successfully!`, "success");
-        }
-      }
-    });
-  }
-
-  const dashboardCentersInput = document.getElementById('dashboard-centers-input');
-  if (dashboardCentersInput) {
-    dashboardCentersInput.addEventListener('change', (e) => {
-      const activeL = state.layouts.find(l => l.id === state.activeLayoutId);
-      if (activeL) {
-        const oldCenters = activeL.centers;
-        const newCenters = e.target.value;
-        if (oldCenters !== newCenters) {
-          activeL.centers = newCenters;
-          saveLayoutsToLocalStorageSilently();
-          showToast(`Publication center(s) updated to "${newCenters}" successfully!`, "success");
-        }
-      }
-    });
-  }
-
-
 
   const btnNewLayout = document.getElementById('btn-new-layout');
   if (btnNewLayout) {
