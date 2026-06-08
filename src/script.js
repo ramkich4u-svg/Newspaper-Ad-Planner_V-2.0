@@ -769,7 +769,7 @@ function renderAllLayouts() {
       miniAdsHtml += `
         <div class="absolute rounded-[1px] border border-opacity-70 flex flex-col justify-center items-center overflow-hidden" 
              style="left:${ad.x * thumbScaleX}px; top:${ad.y * thumbScaleY}px; width:${ad.width * thumbScaleX}px; height:${ad.height * thumbScaleY}px; background-color:${catColor}14; border-color:${catColor};">
-          <span style="font-size: 5px; transform: scale(0.8); line-height: 1; color: #1e293b; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; font-weight: 700;">
+          <span style="font-size: 8px; transform: scale(0.8); line-height: 1; color: #1e293b; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; font-weight: 700;">
             ${ad.client}
           </span>
         </div>
@@ -2918,21 +2918,21 @@ async function triggerPageReportPDFExport() {
         <!-- Stats Brief Panel -->
         <div style="display: flex; gap: 15px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-family: 'Inter', sans-serif; font-size: 9px;">
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1; padding-left: 2px;">
-            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.3px;">Total Pagination Pages</span>
+            <span style="color: #000000; font-size: 8.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Total Pagination Pages</span>
             <span style="font-size: 13px; font-weight: 700; color: #1e293b; font-family: 'Space Grotesk', sans-serif;">${state.pages.length} Pages</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.3px;">Total Placed Advt</span>
+            <span style="color: #000000; font-size: 8.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Total Placed Advt</span>
             <span style="font-size: 13px; font-weight: 700; color: #16a34a; font-family: 'Space Grotesk', sans-serif;">${state.pages.reduce((acc, p) => acc + p.ads.length, 0)} Ads</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.3px;">Average Fill Density</span>
+            <span style="color: #000000; font-size: 8.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Average Fill Density</span>
             <span style="font-size: 13px; font-weight: 700; color: #2563eb; font-family: 'Space Grotesk', sans-serif;">
               ${state.pages.length > 0 ? Math.round(state.pages.reduce((acc, p) => acc + Number(calculatePageFillPercentage(p.id)), 0) / state.pages.length) : 0}% Filled
             </span>
           </div>
           <div style="flex: 1;">
-            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.3px;">Total Page Space (Advt + Edit)</span>
+            <span style="color: #000000; font-size: 8.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Total Page Space (Advt + Edit)</span>
             <span style="font-size: 13px; font-weight: 700; color: #ea580c; font-family: 'Space Grotesk', sans-serif;">${totalVolumeSqcmPdf.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
         </div>
@@ -2960,11 +2960,11 @@ async function triggerPageReportPDFExport() {
         let miniAds = '';
         page.ads.forEach(ad => {
           miniAds += `
-            <div style="position: absolute; left: ${ad.x * scaleX}px; top: ${ad.y * scaleY}px; width: ${ad.width * scaleX}px; height: ${ad.height * scaleY}px; background-color: #f8fafc; border: 0.75px solid #cbd5e1; border-radius: 2px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; padding: 2px; text-align: center; line-height: 1.15; z-index: 5;">
-              <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 5.5px; font-weight: 800; color: #1e293b; max-width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <div style="position: absolute; left: ${ad.x * scaleX}px; top: ${ad.y * scaleY}px; width: ${ad.width * scaleX}px; height: ${ad.height * scaleY}px; background-color: #f8fafc; border: 0.35px solid #cbd5e1; border-radius: 2px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; padding: 2px; text-align: center; line-height: 1.15; z-index: 5;">
+              <span style="font-family: 'Arial Narrow', 'sans-serif-condensed', ui-sans-serif, system-ui, sans-serif; font-size: 5.5px; font-weight: 500; color: #1e293b; max-width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 ${escapeHtml(ad.client)}
               </span>
-              <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 4.5px; font-weight: 700; color: #64748b; display: block; margin-top: 1px; white-space: nowrap;">
+              <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 4px; font-weight: 500; color: #64748b; display: block; margin-top: 1px; white-space: nowrap;">
                 ${ad.width}x${ad.height}
               </span>
             </div>
@@ -3082,19 +3082,19 @@ async function triggerPageReportPDFExport() {
         <!-- Totals Summary Box -->
         <div style="margin-top: 14px; margin-bottom: 12px; display: flex; gap: 16px; background-color: #fafbfb; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 12px; font-family: 'Inter', sans-serif; box-sizing: border-box;">
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1; padding-left: 4px;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.5px;">Total Ad Volume</span>
+            <span style="color: #000000; font-size: 9px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Total Ad Volume</span>
             <span style="font-size: 14px; font-weight: 700; color: #4f46e5; font-family: 'Space Grotesk', sans-serif;">${sumTotalAdVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.5px;">Total Edit Volume</span>
+            <span style="color: #000000; font-size: 9px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Total Edit Volume</span>
             <span style="font-size: 14px; font-weight: 700; color: #d97706; font-family: 'Space Grotesk', sans-serif;">${sumTotalEditVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.5px;">Total Page Space (Advt + Edit)</span>
+            <span style="color: #000000; font-size: 9px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Total Page Space (Advt + Edit)</span>
             <span style="font-size: 14px; font-weight: 700; color: #2563eb; font-family: 'Space Grotesk', sans-serif;">${(sumTotalPageAreaMm2 / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.5px;">Feature Ad Revenue</span>
+            <span style="color: #000000; font-size: 9px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Feature Ad Revenue</span>
             <span style="font-size: 14px; font-weight: 700; color: #059669; font-family: 'Space Grotesk', sans-serif;">₹${sumTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}</span>
           </div>
         </div>
