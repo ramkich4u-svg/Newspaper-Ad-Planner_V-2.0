@@ -65,6 +65,7 @@ window.createNewLayoutPrompt = createNewLayoutPrompt;
 window.renameActiveLayoutPrompt = renameActiveLayoutPrompt;
 window.deleteActiveLayoutConfirm = deleteActiveLayoutConfirm;
 window.openPageSettings = openPageSettings;
+window.triggerDirectSwap = triggerDirectSwap;
 
 // Initialize Application on DOM Ready
 if (document.readyState === 'loading') {
@@ -297,7 +298,7 @@ function switchActiveLayout(newLayoutId) {
 }
 
 // Generic dynamic helper to execute custom prompt/confirm modals flawlessly in iframe scope
-function showCustomDialog({ title, message, isPrompt = false, defaultValue = '', inputLabel = 'Value', showDatePicker = false, defaultDateValue = '', showCentersPicker = false, defaultCentersValue = '', confirmText = 'Confirm', cancelText = 'Cancel', theme = 'blue', onConfirm }) {
+function showCustomDialog({ title, message, isPrompt = false, defaultValue = '', inputLabel = 'Value', showDatePicker = false, defaultDateValue = '', showCentersPicker = false, defaultCentersValue = '', confirmText = 'Confirm', cancelText = 'Cancel', theme = 'blue', hideCancel = false, onConfirm }) {
   const modal = document.getElementById('general-dialog-modal');
   const titleEl = document.getElementById('dialog-title');
   const msgEl = document.getElementById('dialog-message');
@@ -348,6 +349,13 @@ function showCustomDialog({ title, message, isPrompt = false, defaultValue = '',
     centersContainer.classList.add('hidden');
   }
 
+  // Toggle visibility of cancel button dynamically
+  if (hideCancel && btnCancel) {
+    btnCancel.classList.add('hidden');
+  } else if (btnCancel) {
+    btnCancel.classList.remove('hidden');
+  }
+
   // Customize buttons text
   btnCancel.textContent = cancelText;
   btnSubmit.textContent = confirmText;
@@ -369,6 +377,10 @@ function showCustomDialog({ title, message, isPrompt = false, defaultValue = '',
   // Handle dismissals and submit
   const cleanup = () => {
     modal.classList.add('hidden');
+    const swapContainer = document.getElementById('dialog-swap-container');
+    if (swapContainer) {
+      swapContainer.classList.add('hidden');
+    }
     // Remove listeners by cloning elements
     const newSubmit = btnSubmit.cloneNode(true);
     btnSubmit.parentNode.replaceChild(newSubmit, btnSubmit);
@@ -622,6 +634,7 @@ function renderAllLayouts() {
   const badgePageCount = document.getElementById('badge-page-count');
   const badgeLayoutName = document.getElementById('badge-layout-name');
   const badgeLayoutDate = document.getElementById('badge-layout-date');
+  const badgeLayoutCentersLabel = document.getElementById('badge-layout-centers-label');
   const badgeLayoutCenters = document.getElementById('badge-layout-centers');
 
   if (!grid) return;
@@ -689,10 +702,12 @@ function renderAllLayouts() {
     }
     if (badgeLayoutCenters) {
       if (activeL.centers && activeL.centers.trim() !== '') {
-        badgeLayoutCenters.textContent = "Centers: " + activeL.centers;
+        badgeLayoutCenters.textContent = activeL.centers;
         badgeLayoutCenters.classList.remove('hidden');
+        if (badgeLayoutCentersLabel) badgeLayoutCentersLabel.classList.remove('hidden');
       } else {
         badgeLayoutCenters.classList.add('hidden');
+        if (badgeLayoutCentersLabel) badgeLayoutCentersLabel.classList.add('hidden');
       }
     }
   }
@@ -1014,8 +1029,76 @@ function openPageEditor(pageId) {
   showToast(`Opened layout workspace for Page ${page.pageNumber}`, "info");
 }
 
+// Search for and return all active layout violations on a page (unlocked checks)
+function findLayoutViolations(page) {
+  const violations = [];
+  const pageW = page.width || 329;
+  const pageH = page.height || 525;
+
+  // 1. Check boundary violations for each ad
+  for (const ad of page.ads) {
+    if (ad.x < 0 || ad.y < 0 || (ad.x + ad.width) > pageW || (ad.y + ad.height) > pageH) {
+      violations.push(`Ad "${ad.client}" goes out of the page boundaries`);
+    }
+  }
+
+  // 2. Check collision/gap violations between pairs of ads
+  const len = page.ads.length;
+  for (let i = 0; i < len; i++) {
+    const adA = page.ads[i];
+    for (let j = i + 1; j < len; j++) {
+      const adB = page.ads[j];
+      // Check if they are overlapping or violating 3mm spacing buffer
+      if (
+        adA.x < adB.x + adB.width + SPACING_BUFFER_MM &&
+        adB.x < adA.x + adA.width + SPACING_BUFFER_MM &&
+        adA.y < adB.y + adB.height + SPACING_BUFFER_MM &&
+        adB.y < adA.y + adA.height + SPACING_BUFFER_MM
+      ) {
+        // Find whether it is exact overlap or spacing overlap
+        const isExactOverlap = (
+          adA.x < adB.x + adB.width &&
+          adB.x < adA.x + adA.width &&
+          adA.y < adB.y + adB.height &&
+          adB.y < adA.y + adA.height
+        );
+        if (isExactOverlap) {
+          violations.push(`Ad "${adA.client}" overlaps with Ad "${adB.client}"`);
+        } else {
+          violations.push(`Ad "${adA.client}" and Ad "${adB.client}" violate the 3mm safety gap`);
+        }
+      }
+    }
+  }
+  return violations;
+}
+
 // Close Modal editor panel
 function closePageEditor() {
+  const page = state.pages.find(p => p.id === state.activePageId);
+  if (page) {
+    const violations = findLayoutViolations(page);
+    if (violations.length > 0) {
+      showToast("Cannot Exit: Mandatory layout configuration rules violated!", "error");
+      
+      const errorMsg = "This page cannot be closed because of the following layout violations:\n" + 
+                       violations.map((v, idx) => `${idx + 1}. ${v}`).join('\n') + 
+                       "\n\nPlease adjust, move, resize, swap, or remove the advertisements to construct a valid non-overlapping layout (with 3mm spacing) before exiting.";
+      
+      showCustomDialog({
+        title: "Mandatory Layout Integrity Check",
+        message: errorMsg,
+        confirmText: "Fix Layout Issues",
+        theme: "red",
+        hideCancel: true,
+        onConfirm: () => {
+          // Stay inside workspace to let them resolve
+        }
+      });
+      return;
+    }
+  }
+
   state.activePageId = null;
   const modal = document.getElementById('editor-modal');
   modal.classList.add('hidden');
@@ -1344,6 +1427,9 @@ function renderLeftSidebarMenuIndex(page) {
         </div>
       </div>
       <div class="flex items-center gap-1 opacity-0 group-hover/sidebar-item:opacity-100 transition-opacity">
+        <button class="p-1 hover:bg-slate-705 hover:text-amber-400 text-slate-400 rounded transition" onclick="event.stopPropagation(); triggerDirectSwap('${ad.id}')" title="Swap Position">
+          <svg class="w-3" style="width: 12px; height: 12px; fill: none; stroke: currentColor;" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+        </button>
         <button class="p-1 hover:bg-slate-700 text-slate-400 hover:text-white rounded transition" onclick="event.stopPropagation(); loadFormAdConfigure('${ad.id}')" title="Configure">
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
         </button>
@@ -1753,26 +1839,10 @@ function endControlInteraction(e) {
   if (warningLabel) warningLabel.classList.add('hidden');
 
   if (ad) {
-    // Automatically find the bottom-most available position for the given temporary X coordinate
-    // This enforces the "automatically bottom align to page" requirement perfectly!
-    let freeSpace = gravitateToBottom(state.activePageId, interactState.tempW, interactState.tempH, ad.id, interactState.tempX);
-    
-    if (freeSpace) {
-      interactState.tempX = freeSpace.x;
-      interactState.tempY = freeSpace.y;
-      interactState.tempValid = true;
-    } else {
-      // If there's no space in the current column, find any available space across the page (highly bottom-prioritized)
-      const freeSpaceAnywhere = autoFindAvailableSpace(state.activePageId, interactState.tempW, interactState.tempH, ad.id, interactState.tempX, interactState.tempY);
-      if (freeSpaceAnywhere) {
-        interactState.tempX = freeSpaceAnywhere.x;
-        interactState.tempY = freeSpaceAnywhere.y;
-        interactState.tempValid = true;
-        showToast(`Automatically placed ad box bottom-aligned!`, "success");
-      } else {
-        interactState.tempValid = false;
-      }
-    }
+    // Check if the landing position is valid. We preserve manual placement (drag/resize) coordinates directly as requested!
+    // The user's request: "if i move ads manually to top or any other place to adjust other ads, it should be there, only new ad placing time automatically bottom aligne should work"
+    const isBlocked = checkCollision(state.activePageId, ad.id, interactState.tempX, interactState.tempY, interactState.tempW, interactState.tempH);
+    interactState.tempValid = !isBlocked;
 
     if (interactState.tempValid) {
       // Commit placement variables
@@ -1796,7 +1866,7 @@ function endControlInteraction(e) {
       ad.width = interactState.origW;
       ad.height = interactState.origH;
       
-      showToast("Placement rolled back: No available empty space (with 3mm gap) fits this ad size.", "error");
+      showToast("Placement rolled back: Collision/boundary conflict detected at this position.", "error");
     }
   }
 
@@ -1823,6 +1893,12 @@ function checkCollision(pageId, excludeAdId, x, y, w, h) {
   // Page boundaries check
   if (x < 0 || y < 0 || (x + w) > pageW || (y + h) > pageH) {
     return true; // Exceeds custom page dimensions bounds
+  }
+
+  // Check if allow overlap exists and is checked
+  const chkAllowOverlap = document.getElementById('chk-allow-overlap');
+  if (chkAllowOverlap && chkAllowOverlap.checked) {
+    return false; // Bypass advertisement intersection checks
   }
 
   for (const ad of page.ads) {
@@ -1885,6 +1961,11 @@ function autoFindAvailableSpace(pageId, w, h, excludeAdId = null, preferredX = 0
   const xCandidates = new Set([0, pageW - w]);
   const yCandidates = new Set([0, pageH - h]);
 
+  const clampedPrefX = Math.max(0, Math.min(pageW - w, preferredX));
+  const clampedPrefY = Math.max(0, Math.min(pageH - h, preferredY));
+  xCandidates.add(clampedPrefX);
+  yCandidates.add(clampedPrefY);
+
   const colW = pageW / 8;
   for (let i = 1; i <= 7; i++) {
     const cx = Math.round(i * colW);
@@ -1930,20 +2011,21 @@ function autoFindAvailableSpace(pageId, w, h, excludeAdId = null, preferredX = 0
 
   let bestX = null;
   let bestY = null;
-  let maxScore = -Infinity;
+  let minDistance = Infinity;
 
-  // Evaluate candidate combinations using bottom-aligned score priority
-  // Higher Y value (closer to bottom of page) is strictly preferred.
-  // Closest X value (horizontal alignment to preferredX) is the tie-breaker.
+  // Evaluate candidate combinations using Euclidean proximity-based search to (preferredX, preferredY)
+  // This satisfies the request to place "on top of bottom ad" or "beside that ad" right near the target location!
   for (const xVal of xArr) {
     for (const yVal of yArr) {
       if (xVal < 0 || (xVal + w) > pageW || yVal < 0 || (yVal + h) > pageH) continue;
 
       const isBlocked = checkCollision(pageId, excludeAdId, xVal, yVal, w, h);
       if (!isBlocked) {
-        const score = (yVal * 1000) - Math.abs(xVal - preferredX);
-        if (score > maxScore) {
-          maxScore = score;
+        const dx = xVal - preferredX;
+        const dy = yVal - preferredY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < minDistance) {
+          minDistance = distance;
           bestX = xVal;
           bestY = yVal;
         }
@@ -1956,13 +2038,15 @@ function autoFindAvailableSpace(pageId, w, h, excludeAdId = null, preferredX = 0
   }
 
   // Backup step scan search at 5mm increments
-  maxScore = -Infinity;
+  minDistance = Infinity;
   for (let ty = 0; ty <= pageH - h; ty += 5) {
     for (let tx = 0; tx <= pageW - w; tx += 5) {
       if (!checkCollision(pageId, excludeAdId, tx, ty, w, h)) {
-        const score = (ty * 1000) - Math.abs(tx - preferredX);
-        if (score > maxScore) {
-          maxScore = score;
+        const dx = tx - preferredX;
+        const dy = ty - preferredY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < minDistance) {
+          minDistance = distance;
           bestX = tx;
           bestY = ty;
         }
@@ -2177,22 +2261,24 @@ function handleFormAdSubmission(e) {
   const placementX = Math.max(0, Math.min(pageW - reqW, mmX));
   const placementY = Math.max(0, Math.min(pageH - reqH, mmY));
 
-  // Automatically find the bottom-most available position for the coordinates
-  // This satisfies both "automatically place when there is space" and "automatically bottom align to page"
+  // Automatically find the position of the advertisement:
+  // - If the chosen coordinates fit perfectly without collision (both for brand-new and edited ads), KEEP them!
+  // - If they collide, search for the nearest available non-colliding spot (e.g. above/beside colliding bottom ads)
   let placementXFinal = placementX;
   let placementYFinal = placementY;
 
-  const freeSpace = gravitateToBottom(state.activePageId, reqW, reqH, adId || null, placementX);
-  if (freeSpace) {
-    placementXFinal = freeSpace.x;
-    placementYFinal = freeSpace.y;
+  const isCollision = checkCollision(state.activePageId, adId || null, placementX, placementY, reqW, reqH);
+  if (!isCollision) {
+    // Keep target coordinates exactly where clicked/configured
+    placementXFinal = placementX;
+    placementYFinal = placementY;
   } else {
-    // If blocked at the exact chosen X column, find any bottom-most spot across the whole page using bottom-prioritized search
+    // Spot is blocked, find nearest available spot
     const freeSpaceAnywhere = autoFindAvailableSpace(state.activePageId, reqW, reqH, adId || null, placementX, placementY);
     if (freeSpaceAnywhere) {
       placementXFinal = freeSpaceAnywhere.x;
       placementYFinal = freeSpaceAnywhere.y;
-      showToast(`Automatically placed bottom-aligned ad box!`, "success");
+      showToast(`Position adjusted to the closest non-overlapping space`, "success");
     } else {
       showToast("Layout collision conflict! No empty space (with 3mm gap) fits this ad size on page.", "error");
       return;
@@ -2393,6 +2479,20 @@ function setupContextHandlers() {
       e.stopPropagation();
       closeContextMenu();
       if (contextTargetAdId) duplicateAdOnActivePage(contextTargetAdId);
+    }, { passive: true });
+  }
+
+  const ctxSwap = document.getElementById('ctx-swap');
+  if (ctxSwap) {
+    ctxSwap.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeContextMenu();
+      if (contextTargetAdId) triggerDirectSwap(contextTargetAdId);
+    });
+    ctxSwap.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+      closeContextMenu();
+      if (contextTargetAdId) triggerDirectSwap(contextTargetAdId);
     }, { passive: true });
   }
 
@@ -2641,8 +2741,14 @@ async function triggerPageReportPDFExport() {
   const savedStyleElements = [];
 
   try {
-    // Temporarily detach all stylesheets to bypass html2canvas oklch parsing failure
-    const styleElements = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'));
+    // Temporarily detach style elements and non-font stylesheets to bypass html2canvas oklch parsing failure
+    const styleElements = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).filter(el => {
+      const href = el.getAttribute('href') || '';
+      if (href.includes('fonts.googleapis') || href.includes('fonts.gstatic')) {
+        return false; // Keep Google Fonts styles attached so they render correctly in html2canvas
+      }
+      return true;
+    });
     styleElements.forEach(el => {
       const parent = el.parentNode;
       const nextSibling = el.nextSibling;
@@ -2693,7 +2799,7 @@ async function triggerPageReportPDFExport() {
       const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
       tableRows.push(`
         <tr style="background-color: #eff6ff; border-bottom: 1.5px solid #cbd5e1;">
-          <td colspan="6" style="padding: 4px 10px; color: #dc2626; font-weight: 800; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+          <td colspan="6" style="padding: 4px 10px; color: #dc2626; font-weight: 700; font-family: 'Space Grotesk', sans-serif; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px;">
             PAGE - ${page.pageNumber} (${pagePosition})
           </td>
         </tr>
@@ -2702,10 +2808,10 @@ async function triggerPageReportPDFExport() {
       if (page.ads.length === 0) {
         tableRows.push(`
           <tr style="border-bottom: 1.5px solid #cbd5e1; background-color: #ffffff;">
-            <td style="padding: 4px 10px; text-align: center; color: #94a3b8; border-right: 1px solid #cbd5e1; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: bold; font-size: 9px;">
+            <td style="padding: 4px 10px; text-align: center; color: #94a3b8; border-right: 1px solid #cbd5e1; font-family: 'Inter', sans-serif; font-weight: bold; font-size: 9px;">
               -
             </td>
-            <td colspan="5" style="padding: 4px 10px; font-style: italic; color: #94a3b8; text-align: center; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px;">No Advertisements scheduled on this page</td>
+            <td colspan="5" style="padding: 4px 10px; font-style: italic; color: #94a3b8; text-align: center; font-family: 'Inter', sans-serif; font-size: 9px;">No Advertisements scheduled on this page</td>
           </tr>
         `);
       } else {
@@ -2722,22 +2828,22 @@ async function triggerPageReportPDFExport() {
 
           tableRows.push(`
             <tr style="border-bottom: 1px solid #cbd5e1; background-color: #ffffff;">
-              <td style="padding: 4px 10px; text-align: center; color: #0f172a; font-weight: bold; border-right: 1px solid #cbd5e1; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px;">
+              <td style="padding: 4px 10px; text-align: center; color: #0f172a; font-weight: bold; border-right: 1px solid #cbd5e1; font-family: 'JetBrains Mono', monospace; font-size: 9px;">
                 ${idx + 1}
               </td>
-              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; font-weight: 600; color: #0f172a; font-size: 9px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; font-weight: 600; color: #0f172a; font-size: 9px; font-family: 'Inter', sans-serif;">
                 ${escapeHtml(ad.client)}
               </td>
-              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-weight: 500; color: #334155; font-size: 8.5px;">
+              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: 'JetBrains Mono', monospace; font-weight: 500; color: #334155; font-size: 8.5px;">
                 ${ad.width} x ${ad.height} mm
               </td>
-              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-weight: bold; color: #1e40af; font-size: 8.5px;">
+              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #1e40af; font-size: 8.5px;">
                 ${singleAdVolume.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Sqcm
               </td>
-              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-weight: bold; color: #15803d; font-size: 8.5px;">
+              <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #15803d; font-size: 8.5px;">
                 ${adRevenueDisplay}
               </td>
-              <td style="padding: 4px 10px; text-align: center; color: #475569; font-weight: 500; font-size: 8.5px;">
+              <td style="padding: 4px 10px; text-align: center; color: #475569; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 8.5px;">
                 ${categoryLabel}
               </td>
             </tr>
@@ -2795,38 +2901,39 @@ async function triggerPageReportPDFExport() {
 
       let overviewHtml = `
         <!-- Title Header Block -->
-        <div style="border-bottom: 2px solid #334155; padding-bottom: 6px; margin-bottom: 10px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: 'Space Grotesk', 'Inter', sans-serif;">
           <div>
-            <h1 style="font-size: 18px; font-weight: 800; text-transform: uppercase; margin: 0; color: #0f172a; letter-spacing: -0.5px;"><span style="color: #991b1b;">${escapeHtml(activeL?.name || 'Default Layout')}</span> DUMMY LAYOUT${sheetTitleSuffix}</h1>
-            <div style="margin-top: 3px; display: flex; align-items: center; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-              <span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px;">ISSUE DATE: <span style="color: #166534;">${layoutDateFormatted}</span></span>
-              ${centersFormatted ? `<span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px; margin-left: 14px; border-left: 1px solid #cbd5e1; padding-left: 14px;">CENTERS: <span style="color: #c2410c;">${centersFormatted}</span></span>` : ''}
+            <h1 style="font-size: 19px; font-weight: 700; text-transform: uppercase; margin: 0; color: #0f172a; letter-spacing: -0.5px; font-family: 'Space Grotesk', sans-serif;"><span style="color: #ea580c;">${escapeHtml(activeL?.name || 'Default Layout')}</span> DUMMY LAYOUT${sheetTitleSuffix}</h1>
+            <div style="margin-top: 4px; display: flex; align-items: center; gap: 8px; font-family: 'Inter', sans-serif;">
+              <span style="font-size: 10px; color: #4f46e5; background-color: #f5f3ff; border: 1px solid #ddd6fe; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.3px;">ISSUE DATE: <span style="color: #312e81;">${layoutDateFormatted}</span></span>
+              ${centersFormatted ? `<span style="font-size: 10px; color: #7c3aed; background-color: #faf5ff; border: 1px solid #f3e8ff; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.3px;">CENTERS: <span style="color: #581c87;">${centersFormatted}</span></span>` : ''}
             </div>
           </div>
-          <div style="text-align: right; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px; color: #475569; line-height: 1.4;">
-            <strong>Printed:</strong> <span style="font-weight: 700;">${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+          <div style="text-align: right; font-family: 'Inter', sans-serif; font-size: 9px; color: #64748b; line-height: 1.4;">
+            <span style="font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; display: block; font-size: 8px; margin-bottom: 2px;">Response Art Planner</span>
+            <strong>Printed:</strong> <span style="font-weight: 700; color: #0f172a;">${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
           </div>
         </div>
         
         <!-- Stats Brief Panel -->
-        <div style="display: flex; gap: 15px; background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px;">
-          <div style="flex: 1; border-right: 1.5px solid #cbd5e1; padding-left: 5px;">
-            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700;">Total Pagination Pages</span>
-            <span style="font-size: 14px; font-weight: 800; color: #0f172a;">${state.pages.length} Pages</span>
+        <div style="display: flex; gap: 15px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-family: 'Inter', sans-serif; font-size: 9px;">
+          <div style="flex: 1; border-right: 1.5px solid #cbd5e1; padding-left: 2px;">
+            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.3px;">Total Pagination Pages</span>
+            <span style="font-size: 13px; font-weight: 700; color: #1e293b; font-family: 'Space Grotesk', sans-serif;">${state.pages.length} Pages</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700;">Total Placed Advt</span>
-            <span style="font-size: 14px; font-weight: 800; color: #16a34a;">${state.pages.reduce((acc, p) => acc + p.ads.length, 0)} Advertisements</span>
+            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.3px;">Total Placed Advt</span>
+            <span style="font-size: 13px; font-weight: 700; color: #16a34a; font-family: 'Space Grotesk', sans-serif;">${state.pages.reduce((acc, p) => acc + p.ads.length, 0)} Ads</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700;">Average Fill Density</span>
-            <span style="font-size: 14px; font-weight: 800; color: #2563eb;">
-              ${state.pages.length > 0 ? Math.round(state.pages.reduce((acc, p) => acc + Number(calculatePageFillPercentage(p.id)), 0) / state.pages.length) : 0}% Advt Space Filled
+            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.3px;">Average Fill Density</span>
+            <span style="font-size: 13px; font-weight: 700; color: #2563eb; font-family: 'Space Grotesk', sans-serif;">
+              ${state.pages.length > 0 ? Math.round(state.pages.reduce((acc, p) => acc + Number(calculatePageFillPercentage(p.id)), 0) / state.pages.length) : 0}% Filled
             </span>
           </div>
           <div style="flex: 1;">
-            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700;">Total Page Space (Advt + Edit)</span>
-            <span style="font-size: 14px; font-weight: 800; color: #2563eb;">${totalVolumeSqcmPdf.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
+            <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.3px;">Total Page Space (Advt + Edit)</span>
+            <span style="font-size: 13px; font-weight: 700; color: #ea580c; font-family: 'Space Grotesk', sans-serif;">${totalVolumeSqcmPdf.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
         </div>
 
@@ -2938,30 +3045,31 @@ async function triggerPageReportPDFExport() {
 
       let detailsHtml = `
         <!-- Title Header Block -->
-        <div style="border-bottom: 2px solid #334155; padding-bottom: 6px; margin-bottom: 10px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; font-family: 'Space Grotesk', 'Inter', sans-serif;">
           <div>
-            <h1 style="font-size: 16px; font-weight: 800; text-transform: uppercase; margin: 0; color: #0f172a; letter-spacing: -0.5px;"><span style="color: #991b1b;">${escapeHtml(currentLayout?.name || 'Default Layout')}</span> DUMMY LAYOUT AD INDEX${tabTitleSuffix}</h1>
-            <div style="margin-top: 3px; display: flex; align-items: center; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-              <span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px;">ISSUE DATE: <span style="color: #166534;">${layoutDateFormattedVal}</span></span>
-              ${centersFormatted ? `<span style="font-size: 11px; color: #334155; font-weight: 700; letter-spacing: 0.2px; margin-left: 14px; border-left: 1px solid #cbd5e1; padding-left: 14px;">CENTERS: <span style="color: #c2410c;">${centersFormatted}</span></span>` : ''}
+            <h1 style="font-size: 17px; font-weight: 700; text-transform: uppercase; margin: 0; color: #0f172a; letter-spacing: -0.5px; font-family: 'Space Grotesk', sans-serif;"><span style="color: #ea580c;">${escapeHtml(currentLayout?.name || 'Default Layout')}</span> DUMMY LAYOUT AD INDEX${tabTitleSuffix}</h1>
+            <div style="margin-top: 4px; display: flex; align-items: center; gap: 8px; font-family: 'Inter', sans-serif;">
+              <span style="font-size: 10px; color: #4f46e5; background-color: #f5f3ff; border: 1px solid #ddd6fe; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.3px;">ISSUE DATE: <span style="color: #312e81;">${layoutDateFormattedVal}</span></span>
+              ${centersFormatted ? `<span style="font-size: 10px; color: #7c3aed; background-color: #faf5ff; border: 1px solid #f3e8ff; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.3px;">CENTERS: <span style="color: #581c87;">${centersFormatted}</span></span>` : ''}
             </div>
           </div>
-          <div style="text-align: right; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px; color: #475569; line-height: 1.4;">
-            <strong>Printed:</strong> <span style="font-weight: 700;">${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+          <div style="text-align: right; font-family: 'Inter', sans-serif; font-size: 9px; color: #64748b; line-height: 1.4;">
+            <span style="font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; display: block; font-size: 8px; margin-bottom: 2px;">Response Art Planner</span>
+            <strong>Printed:</strong> <span style="font-weight: 700; color: #0f172a;">${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
           </div>
         </div>
 
         <!-- Schedule Table list -->
         <div style="flex-grow: 1; overflow-y: auto; padding-right: 5px; width: 100%;">
-          <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 9px; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; box-sizing: border-box;">
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: 'Inter', sans-serif; font-size: 9px; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; box-sizing: border-box;">
             <thead>
-              <tr style="background-color: #dbeafe; color: #1e3a8a; font-weight: 800; border-bottom: 1.5px solid #cbd5e1; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-                <th style="padding: 5px 10px; width: 110px; border-right: 1px solid #cbd5e1; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">PAGE NUMBER</th>
-                <th style="padding: 5px 10px; border-right: 1px solid #cbd5e1; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">CLIENT NAME</th>
-                <th style="padding: 5px 10px; text-align: center; border-right: 1px solid #cbd5e1; width: 120px; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">SIZE (W x H)</th>
-                <th style="padding: 5px 10px; text-align: center; border-right: 1px solid #cbd5e1; width: 110px; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">VOLUME (SQCM)</th>
-                <th style="padding: 5px 10px; text-align: center; border-right: 1px solid #cbd5e1; width: 110px; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">AD REVENUE</th>
-                <th style="padding: 5px 10px; text-align: center; width: 120px; text-transform: uppercase; font-size: 7.5px; tracking-wider: 0.5px;">AD CATEGORY</th>
+              <tr style="background-color: #f8fafc; color: #1e293b; font-weight: 700; border-bottom: 1.5px solid #cbd5e1; font-family: 'Space Grotesk', sans-serif;">
+                <th style="padding: 6px 10px; width: 110px; border-right: 1px solid #cbd5e1; text-transform: uppercase; font-size: 7.5px; letter-spacing: 0.5px;">PAGE NUMBER</th>
+                <th style="padding: 6px 10px; border-right: 1px solid #cbd5e1; text-transform: uppercase; font-size: 7.5px; letter-spacing: 0.5px;">CLIENT NAME</th>
+                <th style="padding: 6px 10px; text-align: center; border-right: 1px solid #cbd5e1; width: 120px; text-transform: uppercase; font-size: 7.5px; letter-spacing: 0.5px;">SIZE (W x H)</th>
+                <th style="padding: 6px 10px; text-align: center; border-right: 1px solid #cbd5e1; width: 110px; text-transform: uppercase; font-size: 7.5px; letter-spacing: 0.5px;">VOLUME (SQCM)</th>
+                <th style="padding: 6px 10px; text-align: center; border-right: 1px solid #cbd5e1; width: 110px; text-transform: uppercase; font-size: 7.5px; letter-spacing: 0.5px;">AD REVENUE</th>
+                <th style="padding: 6px 10px; text-align: center; width: 120px; text-transform: uppercase; font-size: 7.5px; letter-spacing: 0.5px;">AD CATEGORY</th>
               </tr>
             </thead>
             <tbody>
@@ -2972,28 +3080,28 @@ async function triggerPageReportPDFExport() {
 
         ${tabIdx === totalTabularSheets - 1 ? `
         <!-- Totals Summary Box -->
-        <div style="margin-top: 14px; margin-bottom: 12px; display: flex; gap: 16px; background-color: #fafbfb; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 12px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; box-sizing: border-box;">
+        <div style="margin-top: 14px; margin-bottom: 12px; display: flex; gap: 16px; background-color: #fafbfb; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 12px; font-family: 'Inter', sans-serif; box-sizing: border-box;">
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1; padding-left: 4px;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; tracking-wider: 0.5px;">Total Ad Volume</span>
-            <span style="font-size: 15px; font-weight: 800; color: #4f46e5; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${sumTotalAdVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
+            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.5px;">Total Ad Volume</span>
+            <span style="font-size: 14px; font-weight: 700; color: #4f46e5; font-family: 'Space Grotesk', sans-serif;">${sumTotalAdVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; tracking-wider: 0.5px;">Total Edit Volume</span>
-            <span style="font-size: 15px; font-weight: 800; color: #d97706; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${sumTotalEditVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
+            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.5px;">Total Edit Volume</span>
+            <span style="font-size: 14px; font-weight: 700; color: #d97706; font-family: 'Space Grotesk', sans-serif;">${sumTotalEditVolumeSqcm.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; tracking-wider: 0.5px;">Total Page Space (Advt + Edit)</span>
-            <span style="font-size: 15px; font-weight: 800; color: #2563eb; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${(sumTotalPageAreaMm2 / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
+            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.5px;">Total Page Space (Advt + Edit)</span>
+            <span style="font-size: 14px; font-weight: 700; color: #2563eb; font-family: 'Space Grotesk', sans-serif;">${(sumTotalPageAreaMm2 / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Sqcm</span>
           </div>
           <div style="flex: 1;">
-            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; tracking-wider: 0.5px;">Feature Revenue</span>
-            <span style="font-size: 15px; font-weight: 800; color: #059669; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">₹${sumTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}</span>
+            <span style="color: #64748b; font-size: 8px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Space Grotesk', sans-serif; tracking-wider: 0.5px;">Feature Ad Revenue</span>
+            <span style="font-size: 14px; font-weight: 700; color: #059669; font-family: 'Space Grotesk', sans-serif;">₹${sumTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}</span>
           </div>
         </div>
         ` : ''}
 
         <!-- Page 2 Footer -->
-        <div style="position: absolute; bottom: 12px; left: 32px; right: 32px; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 8.5px; color: #94a3b8; box-sizing: border-box;">
+        <div style="position: absolute; bottom: 12px; left: 32px; right: 32px; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; font-family: 'Inter', sans-serif; font-size: 8.5px; color: #94a3b8; box-sizing: border-box;">
           <span>Page-wise Schedules Table listings index &bull; Parameter Specs only</span>
           <span>Page ${sheetNum} of ${totalPdfSheets}</span>
         </div>
@@ -3136,3 +3244,66 @@ function showConfirmDialog(title, text, proceedCallback) {
   cancelBtn.addEventListener('click', closeRoutineConfirm);
   proceedBtn.addEventListener('click', proceedRoutineConfirm);
 }
+
+function triggerDirectSwap(adId) {
+  const page = state.pages.find(p => p.id === state.activePageId);
+  if (!page) return;
+  const currentAd = page.ads.find(a => a.id === adId);
+  if (!currentAd) return;
+
+  const otherAds = page.ads.filter(a => a.id !== adId);
+  if (otherAds.length === 0) {
+    showToast("There are no other ads on this page to swap with.", "error");
+    return;
+  }
+
+  // Populate select dropdown
+  const selectEl = document.getElementById('dialog-swap-select');
+  if (!selectEl) return;
+  selectEl.innerHTML = '';
+  otherAds.forEach(ad => {
+    const opt = document.createElement('option');
+    opt.value = ad.id;
+    opt.textContent = `${ad.client} (${ad.width}x${ad.height} mm)`;
+    selectEl.appendChild(opt);
+  });
+
+  const dialogSwapContainer = document.getElementById('dialog-swap-container');
+  if (dialogSwapContainer) dialogSwapContainer.classList.remove('hidden');
+
+  showCustomDialog({
+    title: `Swap Positions`,
+    message: `Choose an advertisement box to swap positions & dimensions with "${currentAd.client}". They will exchange their coordinates and sizes atomically.`,
+    isPrompt: false, // hide regular prompt input
+    theme: 'blue',
+    confirmText: "Swap Positions",
+    onConfirm: () => {
+      const targetAdId = selectEl.value;
+      const targetAd = page.ads.find(a => a.id === targetAdId);
+      if (!targetAd) return;
+
+      // Swap physical properties
+      const tempX = currentAd.x;
+      const tempY = currentAd.y;
+      const tempW = currentAd.width;
+      const tempH = currentAd.height;
+
+      currentAd.x = targetAd.x;
+      currentAd.y = targetAd.y;
+      currentAd.width = targetAd.width;
+      currentAd.height = targetAd.height;
+
+      targetAd.x = tempX;
+      targetAd.y = tempY;
+      targetAd.width = tempW;
+      targetAd.height = tempH;
+
+      // Save changes
+      commitHistory();
+      renderActiveEditorBoard();
+      saveLayoutsToLocalStorageSilently();
+      showToast(`Positions swapped between "${currentAd.client}" and "${targetAd.client}"!`, "success");
+    }
+  });
+}
+
