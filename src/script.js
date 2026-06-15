@@ -88,11 +88,20 @@ function initApp() {
       const parsed = JSON.parse(savedV2);
       if (parsed && Array.isArray(parsed.layouts) && parsed.layouts.length > 0) {
         state.layouts = parsed.layouts.map((l, index) => {
-          if (!l.date) {
-            l.date = new Date().toISOString().split('T')[0];
-          }
           if (index === 0) {
             l.name = "Primary Layout 01";
+            if (!l.date) {
+              l.date = new Date().toISOString().split('T')[0];
+            }
+          }
+          const lowCenters = (l.centers || '').toLowerCase();
+          if (lowCenters.includes("vijayawada") || lowCenters.includes("hyderabad") || lowCenters.includes("vizag")) {
+            l.centers = "";
+          } else {
+            l.centers = l.centers || "";
+          }
+          if (!l.date) {
+            l.date = new Date().toISOString().split('T')[0];
           }
           return l;
         });
@@ -102,6 +111,7 @@ function initApp() {
         state.activeLayoutId = activeLayout.id;
         state.pages = clonePages(activeLayout.pages);
         loadedSuccessfully = true;
+        saveLayoutsToLocalStorageSilently(); // Save mapped, sanitized layouts immediately
         showToast("Layout plans loaded successfully", "success");
       }
     } catch (e) {
@@ -121,6 +131,7 @@ function initApp() {
             id: 'layout-primary',
             name: 'Primary Layout 01',
             date: new Date().toISOString().split('T')[0],
+            centers: '',
             pages: clonePages(state.pages)
           };
           state.layouts = [defaultL];
@@ -142,6 +153,7 @@ function initApp() {
       id: 'layout-primary',
       name: 'Primary Layout 01',
       date: new Date().toISOString().split('T')[0],
+      centers: '',
       pages: clonePages(state.pages)
     };
     state.layouts = [defaultL];
@@ -406,6 +418,9 @@ function showCustomDialog({ title, message, isPrompt = false, defaultValue = '',
 
 // Interactive prompt dialog to draft an alternative layout
 function createNewLayoutPrompt() {
+  const currentActive = state.layouts.find(l => l.id === state.activeLayoutId);
+  const defaultDate = currentActive ? currentActive.date : new Date().toISOString().split('T')[0];
+
   showCustomDialog({
     title: "Create alternative draft",
     message: "Enter a descriptive name, choose a publication issue date, and specify publication center(s) for the new layout draft.",
@@ -413,14 +428,14 @@ function createNewLayoutPrompt() {
     defaultValue: `Draft Layout ${state.layouts.length + 1}`,
     inputLabel: "Draft Layout Name",
     showDatePicker: true,
-    defaultDateValue: new Date().toISOString().split('T')[0],
+    defaultDateValue: defaultDate,
     showCentersPicker: true,
     defaultCentersValue: '',
     confirmText: "Create Layout",
     theme: "blue",
     onConfirm: (typedName, selectedDate, typedCenters) => {
       const finalName = typedName.trim() || `Draft Layout ${state.layouts.length + 1}`;
-      const finalDate = selectedDate || new Date().toISOString().split('T')[0];
+      const finalDate = selectedDate || defaultDate;
       const newId = 'layout-' + Date.now();
       
       // Initialize with exactly 1 empty page canvas
@@ -440,6 +455,10 @@ function createNewLayoutPrompt() {
       
       state.layouts.push(newLayout);
       switchActiveLayout(newId);
+      const clientNameEl = document.getElementById('form-client-name');
+      if (clientNameEl) {
+        clientNameEl.value = '';
+      }
       showToast(`Created layout draft "${finalName}" with issue date ${finalDate} successfully`, "success");
     }
   });
@@ -450,6 +469,10 @@ function renameActiveLayoutPrompt() {
   const currentActive = state.layouts.find(l => l.id === state.activeLayoutId);
   if (!currentActive) return;
 
+  const lowCenters = (currentActive.centers || '').toLowerCase();
+  const isDefaultCenters = lowCenters.includes("vijayawada") || lowCenters.includes("hyderabad") || lowCenters.includes("vizag");
+  const initialCenters = isDefaultCenters ? '' : (currentActive.centers || '');
+
   showCustomDialog({
     title: "Rename / Edit Layout Details",
     message: `Provide a new name, issue date, or publication centers for the active layout draft "${currentActive.name}":`,
@@ -457,17 +480,21 @@ function renameActiveLayoutPrompt() {
     defaultValue: currentActive.name,
     inputLabel: "Layout Name",
     showDatePicker: true,
-    defaultDateValue: currentActive.date || '',
+    defaultDateValue: currentActive.date || new Date().toISOString().split('T')[0],
     showCentersPicker: true,
-    defaultCentersValue: currentActive.centers || '',
+    defaultCentersValue: initialCenters,
     confirmText: "Save Details",
     theme: "blue",
     onConfirm: (typedName, typedDate, typedCenters) => {
       const finalName = typedName.trim();
       if (!finalName) return;
       currentActive.name = finalName;
-      if (typedDate !== undefined) currentActive.date = typedDate;
-      if (typedCenters !== undefined) currentActive.centers = typedCenters;
+      currentActive.date = typedDate || currentActive.date || new Date().toISOString().split('T')[0];
+      if (typedCenters !== undefined) {
+        const checkLow = typedCenters.toLowerCase();
+        const isDefault = checkLow.includes("vijayawada") || checkLow.includes("hyderabad") || checkLow.includes("vizag");
+        currentActive.centers = isDefault ? "" : typedCenters;
+      }
       
       saveLayoutsToLocalStorageSilently();
       renderLayoutSelectorDropdown();
@@ -485,6 +512,10 @@ function duplicateActiveLayoutPrompt() {
   // Sync current active layout's state.pages first
   currentActive.pages = clonePages(state.pages);
 
+  const lowCenters = (currentActive.centers || '').toLowerCase();
+  const isDefaultCenters = lowCenters.includes("vijayawada") || lowCenters.includes("hyderabad") || lowCenters.includes("vizag");
+  const initialCenters = isDefaultCenters ? '' : (currentActive.centers || '');
+
   showCustomDialog({
     title: "Duplicate Layout",
     message: `Enter details to duplicate "${currentActive.name}". All scheduled ads, pages, and positions will be copied.`,
@@ -494,7 +525,7 @@ function duplicateActiveLayoutPrompt() {
     showDatePicker: true,
     defaultDateValue: currentActive.date || new Date().toISOString().split('T')[0],
     showCentersPicker: true,
-    defaultCentersValue: currentActive.centers || '',
+    defaultCentersValue: initialCenters,
     confirmText: "Duplicate",
     theme: "blue",
     onConfirm: (typedName, selectedDate, typedCenters) => {
@@ -504,16 +535,24 @@ function duplicateActiveLayoutPrompt() {
       
       const duplicatedPages = clonePages(currentActive.pages);
       
+      const checkLow = (typedCenters || '').toLowerCase();
+      const isDefault = checkLow.includes("vijayawada") || checkLow.includes("hyderabad") || checkLow.includes("vizag");
+      const finalCenters = isDefault ? '' : (typedCenters || '');
+
       const newLayout = {
         id: newId,
         name: finalName,
         date: finalDate,
-        centers: typedCenters || '',
+        centers: finalCenters,
         pages: duplicatedPages
       };
       
       state.layouts.push(newLayout);
       switchActiveLayout(newId);
+      const clientNameEl = document.getElementById('form-client-name');
+      if (clientNameEl) {
+        clientNameEl.value = '';
+      }
       showToast(`Duplicated layout into "${finalName}" successfully`, "success");
     }
   });
@@ -1017,6 +1056,7 @@ function triggerResetAll() {
         id: 'layout-primary',
         name: 'Primary Layout 01',
         date: new Date().toISOString().split('T')[0],
+        centers: '',
         pages: clonePages(state.pages)
       };
       state.layouts = [defaultL];
@@ -1338,13 +1378,6 @@ function renderActiveEditorBoard() {
             ${ad.width} &times; ${ad.height} mm
           </span>
         </div>
-
-        <!-- Edge and Corner Resize Handles (Increase any side with 3mm gap) -->
-        <span class="resize-handle resize-handle-t" data-ad-id="${ad.id}" data-edge="t"></span>
-        <span class="resize-handle resize-handle-b" data-ad-id="${ad.id}" data-edge="b"></span>
-        <span class="resize-handle resize-handle-l" data-ad-id="${ad.id}" data-edge="l"></span>
-        <span class="resize-handle resize-handle-r" data-ad-id="${ad.id}" data-edge="r"></span>
-        <span class="resize-handle resize-handle-br" data-ad-id="${ad.id}" data-edge="br"></span>
       </div>
     `;
   });
