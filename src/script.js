@@ -87,9 +87,12 @@ function initApp() {
     try {
       const parsed = JSON.parse(savedV2);
       if (parsed && Array.isArray(parsed.layouts) && parsed.layouts.length > 0) {
-        state.layouts = parsed.layouts.map(l => {
+        state.layouts = parsed.layouts.map((l, index) => {
           if (!l.date) {
             l.date = new Date().toISOString().split('T')[0];
+          }
+          if (index === 0) {
+            l.name = "Primary Layout 01";
           }
           return l;
         });
@@ -116,7 +119,7 @@ function initApp() {
           state.pages = legacyPages;
           const defaultL = {
             id: 'layout-primary',
-            name: 'Primary Layout v1.0',
+            name: 'Primary Layout 01',
             date: new Date().toISOString().split('T')[0],
             pages: clonePages(state.pages)
           };
@@ -136,8 +139,8 @@ function initApp() {
   if (!loadedSuccessfully) {
     loadSamplePages(); // populates state.pages
     const defaultL = {
-      id: 'layout-default-' + Date.now(),
-      name: 'Primary Layout v1.0',
+      id: 'layout-primary',
+      name: 'Primary Layout 01',
       date: new Date().toISOString().split('T')[0],
       pages: clonePages(state.pages)
     };
@@ -1010,9 +1013,18 @@ function triggerResetAll() {
     "Do you want to restore the layout planner database to its original empty state? This action wipes all local pages entirely.",
     () => {
       loadSamplePages();
+      const defaultL = {
+        id: 'layout-primary',
+        name: 'Primary Layout 01',
+        date: new Date().toISOString().split('T')[0],
+        pages: clonePages(state.pages)
+      };
+      state.layouts = [defaultL];
+      state.activeLayoutId = defaultL.id;
       commitHistory();
+      renderLayoutSelectorDropdown();
       renderAllLayouts();
-      saveToLocalStorage();
+      saveLayoutsToLocalStorageSilently();
       showToast("Planner database reset successfully", "success");
     }
   );
