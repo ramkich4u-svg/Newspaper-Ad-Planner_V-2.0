@@ -759,16 +759,21 @@ function renderAllLayouts() {
     
     let miniAdsHtml = '';
     page.ads.forEach(ad => {
-      let catColor = '#3b82f6';
-      if (ad.category === 'classified') catColor = '#10b981';
-      if (ad.category === 'editorial') catColor = '#f59e0b';
-      if (ad.category === 'political') catColor = '#f43f5e';
-      if (ad.category === 'finance') catColor = '#6366f1';
-      if (ad.category === 'special') catColor = '#8b5cf6';
+      let catColor = '#2563eb';
+      if (ad.category === 'classified') catColor = '#059669';
+      if (ad.category === 'editorial') catColor = '#ea580c';
+      if (ad.category === 'political') catColor = '#c026d3';
+      if (ad.category === 'finance') catColor = '#4f46e5';
+      if (ad.category === 'special') catColor = '#9333ea';
+
+      let bgStyle = `background-color:${catColor}14; border-color:${catColor};`;
+      if (ad.isTentative) {
+        bgStyle = `background-color:#fee2e2; border-color:#f43f5e;`;
+      }
 
       miniAdsHtml += `
         <div class="absolute rounded-[1px] border border-opacity-70 flex flex-col justify-center items-center overflow-hidden" 
-             style="left:${ad.x * thumbScaleX}px; top:${ad.y * thumbScaleY}px; width:${ad.width * thumbScaleX}px; height:${ad.height * thumbScaleY}px; background-color:${catColor}14; border-color:${catColor};">
+             style="left:${ad.x * thumbScaleX}px; top:${ad.y * thumbScaleY}px; width:${ad.width * thumbScaleX}px; height:${ad.height * thumbScaleY}px; ${bgStyle}">
           <span style="font-size: 8px; transform: scale(0.8); line-height: 1; color: #1e293b; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; font-weight: 700;">
             ${ad.client}
           </span>
@@ -784,25 +789,30 @@ function renderAllLayouts() {
     } else {
       let adItemsHtml = '';
       page.ads.forEach(ad => {
-        let catColor = '#3b82f6';
+        let catColor = '#2563eb';
         let catText = 'Retail';
-        if (ad.category === 'classified') { catColor = '#10b981'; catText = 'Health Care'; }
-        if (ad.category === 'editorial') { catColor = '#f59e0b'; catText = 'Real Estate'; }
-        if (ad.category === 'political') { catColor = '#f43f5e'; catText = 'Education'; }
-        if (ad.category === 'finance') { catColor = '#6366f1'; catText = 'B2B'; }
-        if (ad.category === 'special') { catColor = '#8b5cf6'; catText = ad.customCategoryName || 'Others'; }
+        if (ad.category === 'classified') { catColor = '#059669'; catText = 'Health Care'; }
+        if (ad.category === 'editorial') { catColor = '#ea580c'; catText = 'Real Estate'; }
+        if (ad.category === 'political') { catColor = '#c026d3'; catText = 'Education'; }
+        if (ad.category === 'finance') { catColor = '#4f46e5'; catText = 'B2B'; }
+        if (ad.category === 'special') { catColor = '#9333ea'; catText = ad.customCategoryName || 'Others'; }
 
         let pageOptions = state.pages.map(p => {
           if (p.id === page.id) return '';
           return `<option value="${p.id}">Page ${p.pageNumber}</option>`;
         }).join('');
 
+        let tentativeBadge = ad.isTentative ? '<span class="text-[7.5px] font-sans font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded scale-90 flex-shrink-0">TENTATIVE</span>' : '';
+
         adItemsHtml += `
           <div class="flex items-center justify-between text-[10px] bg-white p-1.5 rounded border border-slate-150 shadow-sm gap-1 hover:border-slate-300">
             <div class="flex items-center gap-1.5 min-w-0 flex-1">
               <span class="w-1.5 h-3 rounded-full flex-shrink-0" style="background-color: ${catColor};" title="${catText}"></span>
-              <div class="truncate leading-tight">
-                <p class="font-bold text-slate-700 truncate">${escapeHtml(ad.client)}</p>
+              <div class="truncate leading-tight flex-1">
+                <p class="font-bold text-slate-700 truncate flex items-center gap-1">
+                  <span class="truncate">${escapeHtml(ad.client)}</span>
+                  ${tentativeBadge}
+                </p>
                 <p class="text-[8px] text-slate-400 font-mono">${ad.width}x${ad.height}mm${ad.revenue ? ` • ₹${ad.revenue.toLocaleString()}` : ''}</p>
               </div>
             </div>
@@ -1273,14 +1283,17 @@ function renderActiveEditorBoard() {
     if (ad.category === 'finance') catHeadline = 'B2B';
     if (ad.category === 'special') catHeadline = ad.customCategoryName || 'Others';
 
+    const tentativeClass = ad.isTentative ? 'ad-box-tentative' : '';
+    const tentativeLabelStr = ad.isTentative ? ' • Tentative' : '';
+
     adsHtml += `
       <div id="${ad.id}" 
-           class="ad-box absolute rounded border-2 select-none shadow-md overflow-hidden cursor-grab flex flex-col justify-between p-2.5 box-border ad-box-cat-${ad.category}"
+           class="ad-box group absolute rounded border-2 select-none shadow-md overflow-hidden cursor-grab flex flex-col justify-between p-2.5 box-border ad-box-cat-${ad.category} ${tentativeClass}"
            style="left:${ad.x * mmPx}px; top:${ad.y * mmPx}px; width:${ad.width * mmPx}px; height:${ad.height * mmPx}px; z-index: 20;"
            data-ad-id="${ad.id}">
         
-        <!-- Category left accent tag -->
-        <div class="cat-accent absolute left-0 top-0 bottom-0 w-1.5"></div>
+        <!-- Category bottom accent tag -->
+        <div class="cat-accent absolute left-0 right-0 bottom-0 h-1.5"></div>
 
         <!-- Meta elements row (Close and Info) -->
         <div class="flex items-start justify-between gap-1 w-full pl-1">
@@ -1289,7 +1302,7 @@ function renderActiveEditorBoard() {
               ${ad.client}
             </h5>
             <span class="text-[8px] font-medium text-slate-500 scale-95 origin-left block mt-0.5">
-              ${catHeadline}${ad.revenue ? ` • ₹${ad.revenue.toLocaleString()}` : ''}
+              ${catHeadline}${ad.revenue ? ` • ₹${ad.revenue.toLocaleString()}` : ''}${tentativeLabelStr}
             </span>
           </div>
           
@@ -1413,8 +1426,8 @@ function renderLeftSidebarMenuIndex(page) {
     
     let colorText = 'bg-blue-600';
     if (ad.category === 'classified') colorText = 'bg-emerald-600';
-    if (ad.category === 'editorial') colorText = 'bg-amber-600';
-    if (ad.category === 'political') colorText = 'bg-rose-600';
+    if (ad.category === 'editorial') colorText = 'bg-orange-600';
+    if (ad.category === 'political') colorText = 'bg-fuchsia-600';
     if (ad.category === 'finance') colorText = 'bg-indigo-600';
     if (ad.category === 'special') colorText = 'bg-purple-600';
 
@@ -1422,7 +1435,10 @@ function renderLeftSidebarMenuIndex(page) {
       <div class="overflow-hidden flex items-center gap-2">
         <span class="w-2 h-2 rounded-full ${colorText} flex-shrink-0"></span>
         <div class="overflow-hidden min-w-[130px]">
-          <h6 class="text-[11px] font-bold text-white leading-tight truncate tracking-tight">${ad.client}</h6>
+          <h6 class="text-[11px] font-bold text-white leading-tight truncate tracking-tight flex items-center gap-1.5">
+            <span class="truncate">${escapeHtml(ad.client)}</span>
+            ${ad.isTentative ? '<span class="text-[7.5px] font-sans font-medium text-rose-400 border border-rose-500/30 bg-rose-950/40 px-1 py-0.1 rounded flex-shrink-0 select-none">Tentative</span>' : ''}
+          </h6>
           <span class="text-[9px] font-mono text-slate-500 mt-0.5 block">${ad.width} &times; ${ad.height} mm${ad.revenue ? ` • ₹${ad.revenue.toLocaleString()}` : ''}</span>
         </div>
       </div>
@@ -1507,6 +1523,11 @@ function updateZoomUI() {
 // =========================================================================
 
 function initiateControlInteraction(e) {
+  // If we clicked or touched a button (Fast Action buttons on target ad-box), do not drag/interfere
+  if (e.target.closest('button')) {
+    return;
+  }
+
   // Prevent default gesture scaling on mobile
   if (e.type === 'touchstart') {
     // Only intercept if we touch inside handles or ad bounds
@@ -2155,6 +2176,9 @@ function triggerEmptySpaceClickForm(mmX, mmY) {
   const customInput = document.getElementById('form-custom-category');
   if (customInput) customInput.value = '';
 
+  const tentativeCheck = document.getElementById('form-is-tentative');
+  if (tentativeCheck) tentativeCheck.checked = false;
+
   // Standard category
   selectCategoryThemeRadio('retail');
 
@@ -2183,6 +2207,9 @@ function loadFormAdConfigure(adId) {
   }
   const customInput2 = document.getElementById('form-custom-category');
   if (customInput2) customInput2.value = ad.customCategoryName || '';
+
+  const tentativeCheck2 = document.getElementById('form-is-tentative');
+  if (tentativeCheck2) tentativeCheck2.checked = ad.isTentative || false;
 
   // Set category selector radio visually up to match
   selectCategoryThemeRadio(ad.category || 'retail');
@@ -2241,6 +2268,9 @@ function handleFormAdSubmission(e) {
   const customCatInput = document.getElementById('form-custom-category');
   const customCategoryName = customCatInput ? customCatInput.value.trim() : '';
 
+  const tentativeCheck = document.getElementById('form-is-tentative');
+  const isTentative = tentativeCheck ? tentativeCheck.checked : false;
+
   const page = state.pages.find(p => p.id === state.activePageId);
   if (!page) return;
 
@@ -2297,6 +2327,7 @@ function handleFormAdSubmission(e) {
       adObj.category = catTheme;
       adObj.customCategoryName = customCategoryName;
       adObj.revenue = revenueVal;
+      adObj.isTentative = isTentative;
       
       commitHistory();
       showToast(`Ad "${clientName}" updated successfully`, "success");
@@ -2312,7 +2343,8 @@ function handleFormAdSubmission(e) {
       height: reqH,
       category: catTheme,
       customCategoryName: customCategoryName,
-      revenue: revenueVal
+      revenue: revenueVal,
+      isTentative: isTentative
     };
 
     page.ads.push(newAd);
@@ -2826,13 +2858,18 @@ async function triggerPageReportPDFExport() {
           const singleAdVolume = (ad.width * ad.height) / 100;
           const adRevenueDisplay = ad.revenue ? `${ad.revenue.toLocaleString()}` : '0';
 
+          const rowBgColor = ad.isTentative ? '#fef2f2' : '#ffffff';
+          const nameLabelHtml = ad.isTentative
+            ? `${escapeHtml(ad.client)} <span style="font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 6.5px; font-weight: bold; color: #dc2626; border: 0.35px solid #fca5a5; background-color: #fee2e2; padding: 1px 3px; border-radius: 2px; margin-left: 4px; display: inline-block; vertical-align: middle;">TENTATIVE</span>`
+            : escapeHtml(ad.client);
+
           tableRows.push(`
-            <tr style="border-bottom: 1px solid #cbd5e1; background-color: #ffffff;">
+            <tr style="border-bottom: 1px solid #cbd5e1; background-color: ${rowBgColor};">
               <td style="padding: 4px 10px; text-align: center; color: #0f172a; font-weight: bold; border-right: 1px solid #cbd5e1; font-family: 'JetBrains Mono', monospace; font-size: 9px;">
                 ${idx + 1}
               </td>
               <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; font-weight: 600; color: #0f172a; font-size: 9px; font-family: 'Inter', sans-serif;">
-                ${escapeHtml(ad.client)}
+                ${nameLabelHtml}
               </td>
               <td style="padding: 4px 10px; border-right: 1px solid #cbd5e1; text-align: center; font-family: 'JetBrains Mono', monospace; font-weight: 500; color: #334155; font-size: 8.5px;">
                 ${ad.width} x ${ad.height} mm
@@ -2852,7 +2889,7 @@ async function triggerPageReportPDFExport() {
       }
     });
 
-    const totalOverviewSheets = Math.ceil(state.pages.length / 16);
+    const totalOverviewSheets = Math.ceil(state.pages.length / 14);
     
     // Calculate tabularPages list using our new smart chunking algorithm to optimize page space usage
     const tabularPages = [];
@@ -2873,15 +2910,15 @@ async function triggerPageReportPDFExport() {
     const maxThumbH = Math.max(...state.pages.map(p => {
       const pageW = p.width || 329;
       const pageH = p.height || 525;
-      return Math.round(74 * (pageH / pageW));
+      return Math.round(90 * (pageH / pageW));
     }));
 
     let isFirstPage = true;
 
     // 1. RENDER PAGE(S) FOR OVERVIEW (GRAPHICAL FLATPLAN)
     for (let sheetIdx = 0; sheetIdx < totalOverviewSheets; sheetIdx++) {
-      const startIdx = sheetIdx * 16;
-      const endIdx = Math.min(startIdx + 16, state.pages.length);
+      const startIdx = sheetIdx * 14;
+      const endIdx = Math.min(startIdx + 14, state.pages.length);
       const pagesSlice = state.pages.slice(startIdx, endIdx);
 
       const overviewEl = document.createElement('div');
@@ -2938,13 +2975,13 @@ async function triggerPageReportPDFExport() {
         </div>
 
         <!-- Thumbnails Flex List -->
-        <div style="display: flex; flex-wrap: wrap; gap: 10px; flex-grow: 1; justify-content: flex-start; align-content: flex-start; overflow: hidden; width: 100%;">
+        <div style="display: flex; flex-wrap: wrap; gap: 11px; flex-grow: 1; justify-content: flex-start; align-content: flex-start; overflow: hidden; width: 100%;">
       `;
 
       pagesSlice.forEach(page => {
         const pageW = page.width || 329;
         const pageH = page.height || 525;
-        const thumbW = 74;
+        const thumbW = 90;
         const thumbH = Math.round(thumbW * (pageH / pageW));
 
         const scaleX = thumbW / pageW;
@@ -2959,10 +2996,15 @@ async function triggerPageReportPDFExport() {
 
         let miniAds = '';
         page.ads.forEach(ad => {
+          const adBg = ad.isTentative ? '#fee2e2' : '#f8fafc';
+          const adBorder = ad.isTentative ? '0.4px solid rgba(239, 68, 68, 0.5)' : '0.4px solid rgba(0, 0, 0, 0.25)';
+          const adTextColor = ad.isTentative ? '#991b1b' : '#1e293b';
+          const nameLabel = ad.isTentative ? `${escapeHtml(ad.client)} [T]` : escapeHtml(ad.client);
+
           miniAds += `
-            <div style="position: absolute; left: ${ad.x * scaleX}px; top: ${ad.y * scaleY}px; width: ${ad.width * scaleX}px; height: ${ad.height * scaleY}px; background-color: #f8fafc; border: 0.35px solid #cbd5e1; border-radius: 2px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; padding: 2px; text-align: center; line-height: 1.15; z-index: 5;">
-              <span style="font-family: 'Arial Narrow', 'sans-serif-condensed', ui-sans-serif, system-ui, sans-serif; font-size: 5.5px; font-weight: 500; color: #1e293b; max-width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                ${escapeHtml(ad.client)}
+            <div style="position: absolute; left: ${ad.x * scaleX}px; top: ${ad.y * scaleY}px; width: ${ad.width * scaleX}px; height: ${ad.height * scaleY}px; background-color: ${adBg}; border: ${adBorder}; border-radius: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; padding: 2px; text-align: center; line-height: 1.15; z-index: 5;">
+              <span style="font-family: 'Arial Narrow', 'sans-serif-condensed', ui-sans-serif, system-ui, sans-serif; font-size: 5.5px; font-weight: 500; color: ${adTextColor}; max-width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${nameLabel}
               </span>
               <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 4px; font-weight: 500; color: #64748b; display: block; margin-top: 1px; white-space: nowrap;">
                 ${ad.width}x${ad.height}
@@ -2977,7 +3019,7 @@ async function triggerPageReportPDFExport() {
         const posColor = pagePosition === 'LEFT' ? '#4338ca' : '#7e22ce'; // indigo-700 / purple-700
 
         overviewHtml += `
-          <div style="background-color: #fafbfb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 6px; display: flex; flex-direction: column; align-items: center; width: 90px; box-sizing: border-box;">
+          <div style="background-color: #fafbfb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 6px; display: flex; flex-direction: column; align-items: center; width: 108px; box-sizing: border-box;">
             <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
               <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 8.5px; font-weight: bold; color: #1e293b; display: block;">PAGE ${page.pageNumber}</span>
               <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 6.5px; font-weight: bold; color: ${posColor}; background-color: #f1f5f9; padding: 1px 3px; border-radius: 3px; border: 1px solid #e2e8f0;">${pagePosition}</span>
@@ -2985,7 +3027,7 @@ async function triggerPageReportPDFExport() {
             <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 6.5px; color: #64748b; margin-bottom: 2px; font-weight: 500;">${pageW} &times; ${pageH} mm</span>
             
             <div style="display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; height: ${maxThumbH}px; margin-bottom: 4px; background: transparent;">
-              <div style="position: relative; width: ${thumbW}px; height: ${thumbH}px; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05)">
+              <div style="position: relative; width: ${thumbW}px; height: ${thumbH}px; background-color: #ffffff; border: 0.4px solid rgba(0, 0, 0, 0.35); border-radius: 0; overflow: hidden; box-shadow: none;">
                 ${colGuidelines}
                 ${miniAds}
               </div>

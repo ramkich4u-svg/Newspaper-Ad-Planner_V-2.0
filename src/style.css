@@ -82,25 +82,25 @@ body {
 }
 
 .ad-box-cat-editorial {
-  border-color: #d97706;
-  background-color: rgba(217, 119, 6, 0.08);
+  border-color: #ea580c;
+  background-color: rgba(234, 88, 12, 0.08);
 }
 .ad-box-cat-editorial:hover {
-  background-color: rgba(217, 119, 6, 0.12);
+  background-color: rgba(234, 88, 12, 0.12);
 }
 .ad-box-cat-editorial .cat-accent {
-  background-color: #d97706;
+  background-color: #ea580c;
 }
 
 .ad-box-cat-political {
-  border-color: #e11d48;
-  background-color: rgba(225, 29, 72, 0.08);
+  border-color: #c026d3;
+  background-color: rgba(192, 38, 211, 0.08);
 }
 .ad-box-cat-political:hover {
-  background-color: rgba(225, 29, 72, 0.12);
+  background-color: rgba(192, 38, 211, 0.12);
 }
 .ad-box-cat-political .cat-accent {
-  background-color: #e11d48;
+  background-color: #c026d3;
 }
 
 .ad-box-cat-finance {
@@ -123,6 +123,18 @@ body {
 }
 .ad-box-cat-special .cat-accent {
   background-color: #9333ea;
+}
+
+/* Tentative Ad Styling override */
+.ad-box.ad-box-tentative {
+  border-color: #f43f5e !important;
+  background-color: #fef2f2 !important;
+}
+.ad-box.ad-box-tentative:hover {
+  background-color: #fee2e2 !important;
+}
+.ad-box.ad-box-tentative .cat-accent {
+  background-color: #f43f5e !important;
 }
 
 /* Drag State Clones and Visual Feedback */
