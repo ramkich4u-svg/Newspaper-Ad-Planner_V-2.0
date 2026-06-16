@@ -7,6 +7,64 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import './style.css';
 
+// Dynamic Head configurations and Source Protection mechanisms to prevent unauthorized cloning or viewing
+(function() {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    // 1. Dynamic document titles and viewports
+    document.title = "Newspaper Ad Dummy Planner - Professional System";
+
+    if (!document.querySelector('meta[name="viewport"]')) {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1.0';
+      document.head.appendChild(meta);
+    }
+
+    // 2. Dynamic Preconnects to Font APIs
+    const preconnect1 = document.createElement('link');
+    preconnect1.rel = 'preconnect';
+    preconnect1.href = 'https://fonts.googleapis.com';
+    document.head.appendChild(preconnect1);
+
+    const preconnect2 = document.createElement('link');
+    preconnect2.rel = 'preconnect';
+    preconnect2.href = 'https://fonts.gstatic.com';
+    preconnect2.setAttribute('crossorigin', 'anonymous');
+    document.head.appendChild(preconnect2);
+
+    // 3. Dynamic Google Fonts import link
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap';
+    document.head.appendChild(fontLink);
+
+    // 4. Source protection context-menu lock (prevents right clicks on standard areas, keeping custom menus intact)
+    document.addEventListener('contextmenu', (e) => {
+      const targetEl = e.target;
+      if (targetEl && (targetEl.closest('input') || targetEl.closest('textarea') || targetEl.closest('select') || targetEl.closest('[contenteditable="true"]'))) {
+        return; // Allow default on input controls
+      }
+      if (targetEl && targetEl.closest('.ad-box')) {
+        return; // Allow our custom right-click context menu on ad boxes
+      }
+      // Otherwise prevent standard context menu
+      e.preventDefault();
+    });
+
+    // 5. Source protection keyboard keydown intercepts (prevents F12, Ctrl+U, Ctrl+Shift+I, etc.)
+    document.addEventListener('keydown', (e) => {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.key === 'u') ||
+        (e.ctrlKey && e.key === 'U') ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
+      ) {
+        e.preventDefault();
+      }
+    });
+  }
+})();
+
 // Core Constants
 const BASE_DPI = 1.5; // pixel density per millimeter for base design scaling (at zoom 100%)
 const MIN_AD_SIZE_MM = 15; // Minimum size for width and height in mm
@@ -823,6 +881,8 @@ function renderAllLayouts() {
       `;
     });
 
+    const miniEmptySpacesHtml = buildEmptySpaceSVG(page, thumbScaleX, thumbScaleY, false);
+
     const pagePercentOccupied = calculatePageFillPercentage(page.id);
 
     let adListHtml = '';
@@ -897,6 +957,7 @@ function renderAllLayouts() {
         <div class="relative border border-slate-950 bg-white overflow-hidden shadow-md" style="width: ${thumbW}px; height: ${thumbH}px;">
           <!-- 8-Column dashed guidelines -->
           ${thumbColLinesHtml}
+          ${miniEmptySpacesHtml}
           ${miniAdsHtml}
         </div>
         
@@ -968,6 +1029,357 @@ function calculatePageFillPercentage(pageId) {
   });
 
   return Math.min(100, Math.round((filledArea / totalPageArea) * 100));
+}
+
+// Compute all unoccupied disjoint rectangles in the page layout using 2D subtraction
+function calculateEmptyRectangles(page) {
+  if (!page) return [];
+  const pageW = page.width || 329;
+  const pageH = page.height || 525;
+
+  // Start with the full page as a single empty rectangle
+  let rects = [{ x: 0, y: 0, width: pageW, height: pageH }];
+
+  // Helper to subtract one rectangle from another
+  function subtractRect(rect, sub) {
+    const x1 = Math.max(rect.x, sub.x);
+    const x2 = Math.min(rect.x + rect.width, sub.x + sub.width);
+    const y1 = Math.max(rect.y, sub.y);
+    const y2 = Math.min(rect.y + rect.height, sub.y + sub.height);
+
+    // No overlap
+    if (x1 >= x2 || y1 >= y2) {
+      return [rect];
+    }
+
+    const result = [];
+
+    // Left part
+    if (sub.x > rect.x) {
+      result.push({
+        x: rect.x,
+        y: rect.y,
+        width: sub.x - rect.x,
+        height: rect.height
+      });
+    }
+
+    // Right part
+    if (rect.x + rect.width > sub.x + sub.width) {
+      result.push({
+        x: sub.x + sub.width,
+        y: rect.y,
+        width: rect.x + rect.width - (sub.x + sub.width),
+        height: rect.height
+      });
+    }
+
+    // Top part
+    if (sub.y > rect.y) {
+      result.push({
+        x: x1,
+        y: rect.y,
+        width: x2 - x1,
+        height: sub.y - rect.y
+      });
+    }
+
+    // Bottom part
+    if (rect.y + rect.height > sub.y + sub.height) {
+      result.push({
+        x: x1,
+        y: sub.y + sub.height,
+        width: x2 - x1,
+        height: rect.y + rect.height - (sub.y + sub.height)
+      });
+    }
+
+    return result;
+  }
+
+  // Iterate over all active ads (excluding comments)
+  const activeAds = page.ads.filter(ad => ad.category !== 'comment');
+
+  activeAds.forEach(ad => {
+    let nextRects = [];
+    rects.forEach(r => {
+      // Inflate the ad box by 3mm on all sides to keep a 3mm safety gap (distance)
+      const ax = (ad.x || 0) - 3;
+      const ay = (ad.y || 0) - 3;
+      const aw = (ad.width || 0) + 6;
+      const ah = (ad.height || 0) + 6;
+
+      nextRects.push(...subtractRect(r, {
+        x: ax,
+        y: ay,
+        width: aw,
+        height: ah
+      }));
+    });
+    rects = nextRects;
+  });
+
+  // Filter out tiny slivers (width < 3mm or height < 3mm)
+  rects = rects.filter(r => r.width >= 3 && r.height >= 3);
+
+  // Merge adjacent rectangles with matching dimensions to form larger blocks
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        const r1 = rects[i];
+        const r2 = rects[j];
+
+        // Case 1: Merge vertically (same X and width, touching vertically)
+        if (Math.abs(r1.x - r2.x) < 0.1 && Math.abs(r1.width - r2.width) < 0.1) {
+          if (Math.abs(r1.y + r1.height - r2.y) < 0.1) {
+            r1.height += r2.height;
+            rects.splice(j, 1);
+            changed = true;
+            break;
+          }
+          if (Math.abs(r2.y + r2.height - r1.y) < 0.1) {
+            r2.height += r1.height;
+            rects.splice(i, 1);
+            changed = true;
+            break;
+          }
+        }
+
+        // Case 2: Merge horizontally (same Y and height, touching horizontally)
+        if (Math.abs(r1.y - r2.y) < 0.1 && Math.abs(r1.height - r2.height) < 0.1) {
+          if (Math.abs(r1.x + r1.width - r2.x) < 0.1) {
+            r1.width += r2.width;
+            rects.splice(j, 1);
+            changed = true;
+            break;
+          }
+          if (Math.abs(r2.x + r2.width - r1.x) < 0.1) {
+            r2.width += r1.width;
+            rects.splice(i, 1);
+            changed = true;
+            break;
+          }
+        }
+      }
+      if (changed) break;
+    }
+  }
+
+  // To prevent multiple "EDIT" texts as requested: tag the single largest rectangle
+  if (rects.length > 0) {
+    let largest = rects[0];
+    rects.forEach(r => {
+      r.isLargest = false;
+      if ((r.width * r.height) > (largest.width * largest.height)) {
+        largest = r;
+      }
+    });
+    largest.isLargest = true;
+  }
+
+  return rects;
+}
+
+// Generate unified SVG representing the entire unoccupied space contour
+function buildEmptySpaceSVG(page, scaleX, scaleY, isInteractive = false) {
+  const rects = calculateEmptyRectangles(page);
+  if (rects.length === 0) return '';
+
+  const pageW = page.width || 329;
+  const pageH = page.height || 525;
+  const widthPx = pageW * scaleX;
+  const heightPx = pageH * scaleY;
+
+  // Calculate boundary segments Snapping coordinates to integers (mm grid)
+  const hSegments = {};
+  const vSegments = {};
+
+  rects.forEach(r => {
+    const rx = Math.round(r.x);
+    const ry = Math.round(r.y);
+    const rw = Math.round(r.width);
+    const rh = Math.round(r.height);
+
+    // Top edge
+    for (let x = rx; x < rx + rw; x++) {
+      const key = `${ry},${x}`;
+      hSegments[key] = (hSegments[key] || 0) + 1;
+    }
+    // Bottom edge
+    for (let x = rx; x < rx + rw; x++) {
+      const key = `${ry + rh},${x}`;
+      hSegments[key] = (hSegments[key] || 0) + 1;
+    }
+    // Left edge
+    for (let y = ry; y < ry + rh; y++) {
+      const key = `${rx},${y}`;
+      vSegments[key] = (vSegments[key] || 0) + 1;
+    }
+    // Right edge
+    for (let y = ry; y < ry + rh; y++) {
+      const key = `${rx + rw},${y}`;
+      vSegments[key] = (vSegments[key] || 0) + 1;
+    }
+  });
+
+  const boundaryH = [];
+  for (const key in hSegments) {
+    if (hSegments[key] === 1) {
+      const [y, x] = key.split(',').map(Number);
+      boundaryH.push({ y, x });
+    }
+  }
+
+  const boundaryV = [];
+  for (const key in vSegments) {
+    if (vSegments[key] === 1) {
+      const [x, y] = key.split(',').map(Number);
+      boundaryV.push({ x, y });
+    }
+  }
+
+  // Merge horizontal consecutive segments
+  const hGroups = {};
+  boundaryH.forEach(seg => {
+    if (!hGroups[seg.y]) hGroups[seg.y] = [];
+    hGroups[seg.y].push(seg.x);
+  });
+
+  const mergedH = [];
+  for (const yStr in hGroups) {
+    const y = Number(yStr);
+    const xs = hGroups[yStr].sort((a, b) => a - b);
+    if (xs.length === 0) continue;
+    let startX = xs[0];
+    let prevX = xs[0];
+    for (let i = 1; i <= xs.length; i++) {
+      if (i < xs.length && xs[i] === prevX + 1) {
+        prevX = xs[i];
+      } else {
+        mergedH.push({ y, x1: startX, x2: prevX + 1 });
+        if (i < xs.length) {
+          startX = xs[i];
+          prevX = xs[i];
+        }
+      }
+    }
+  }
+
+  // Merge vertical consecutive segments
+  const vGroups = {};
+  boundaryV.forEach(seg => {
+    if (!vGroups[seg.x]) vGroups[seg.x] = [];
+    vGroups[seg.x].push(seg.y);
+  });
+
+  const mergedV = [];
+  for (const xStr in vGroups) {
+    const x = Number(xStr);
+    const ys = vGroups[xStr].sort((a, b) => a - b);
+    if (ys.length === 0) continue;
+    let startY = ys[0];
+    let prevY = ys[0];
+    for (let i = 1; i <= ys.length; i++) {
+      if (i < ys.length && ys[i] === prevY + 1) {
+        prevY = ys[i];
+      } else {
+        mergedV.push({ x, y1: startY, y2: prevY + 1 });
+        if (i < ys.length) {
+          startY = ys[i];
+          prevY = ys[i];
+        }
+      }
+    }
+  }
+
+  // Draw light blue filled rectangles representing empty regions (seamless merge inside SVG since there are no borders on individual rects)
+  let rectsSvg = '';
+  rects.forEach(r => {
+    rectsSvg += `<rect x="${r.x * scaleX}" y="${r.y * scaleY}" width="${r.width * scaleX}" height="${r.height * scaleY}" fill="rgba(239, 246, 255, 0.45)" stroke="none" />`;
+  });
+
+  // Render unified perimeter boundary paths
+  let linesSvg = '';
+  const strokeColor = '#3b82f6';
+  const strokeWidth = isInteractive ? 1.6 : 0.6;
+  const strokeDash = isInteractive ? '5,5' : '1.5,1.5';
+
+  mergedH.forEach(line => {
+    linesSvg += `<line x1="${line.x1 * scaleX}" y1="${line.y * scaleY}" x2="${line.x2 * scaleX}" y2="${line.y * scaleY}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-dasharray="${strokeDash}" />`;
+  });
+
+  mergedV.forEach(line => {
+    linesSvg += `<line x1="${line.x * scaleX}" y1="${line.y1 * scaleY}" x2="${line.x * scaleX}" y2="${line.y2 * scaleY}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-dasharray="${strokeDash}" />`;
+  });
+
+  // Single centered label placeholder
+  let labelHtml = '';
+  if (rects.length > 0) {
+    // Calculate area-weighted centroid of all empty rectangles to find the true visual center of the collective space
+    let totalArea = 0;
+    let sumX = 0;
+    let sumY = 0;
+    rects.forEach(r => {
+      const area = r.width * r.height;
+      totalArea += area;
+      sumX += (r.x + r.width / 2) * area;
+      sumY += (r.y + r.height / 2) * area;
+    });
+
+    const targetX = sumX / totalArea;
+    const targetY = sumY / totalArea;
+
+    // Find the rectangle closest to this centroid to project the label safely inside a valid empty region
+    let bestRect = rects[0];
+    let minDistance = Infinity;
+    rects.forEach(r => {
+      const cx = r.x + r.width / 2;
+      const cy = r.y + r.height / 2;
+      const dist = Math.hypot(cx - targetX, cy - targetY);
+      if (dist < minDistance) {
+        minDistance = dist;
+        bestRect = r;
+      }
+    });
+
+    // Project coordinates onto the boundary of the best rectangle keeping a safe margin
+    const labelX = Math.max(bestRect.x + 5, Math.min(bestRect.x + bestRect.width - 5, targetX)) * scaleX;
+    const labelY = Math.max(bestRect.y + 2, Math.min(bestRect.y + bestRect.height - 2, targetY)) * scaleY;
+
+    const minSize = isInteractive ? 8 : 1.5;
+    const maxSize = isInteractive ? 22 : 8;
+    const rawSize = Math.round(Math.min((bestRect.width * scaleX) / 4.2, (bestRect.height * scaleY) / 1.8)) - 2;
+    const fontSize = Math.max(minSize, Math.min(maxSize, rawSize));
+
+    labelHtml = `
+      <text x="${labelX}" y="${labelY}" 
+            text-anchor="middle" dominant-baseline="central"
+            fill="#3b82f6" font-family="'Space Grotesk', 'Inter', sans-serif" 
+            font-weight="900" font-size="${fontSize}px" opacity="0.8" style="letter-spacing: 0.05em; pointer-events: none; user-select: none;">
+        EDIT
+      </text>
+    `;
+  }
+
+  const cursorStyle = isInteractive ? 'cursor: pointer;' : '';
+  const pointerEvents = isInteractive ? 'pointer-events: auto;' : 'pointer-events: none;';
+  const hoverClass = isInteractive ? 'empty-space-overlay-svg hover:opacity-100 transition-opacity' : 'empty-space-overlay-svg';
+
+  return `
+    <svg class="${hoverClass}" 
+         style="position: absolute; width: ${widthPx}px; height: ${heightPx}px; top: 0; left: 0; ${pointerEvents} ${cursorStyle} z-index: 10;"
+         viewBox="0 0 ${widthPx} ${heightPx}" xmlns="http://www.w3.org/2000/svg">
+      <g opacity="0.6">
+        ${rectsSvg}
+      </g>
+      <g>
+        ${linesSvg}
+      </g>
+      ${labelHtml}
+    </svg>
+  `;
 }
 
 // Add a new broad sheet page
@@ -1394,7 +1806,10 @@ function renderActiveEditorBoard() {
     `;
   }
 
-  canvas.innerHTML = editorColLinesHtml + adsHtml;
+  // Render clickable empty space "EDIT" boxes contour overlay
+  const emptySpacesHtml = buildEmptySpaceSVG(page, mmPx, mmPx, true);
+
+  canvas.innerHTML = editorColLinesHtml + emptySpacesHtml + adsHtml;
 
   // Setup contextual click event listeners on freshly bound HTML ad-box elements
   const boxes = canvas.querySelectorAll('.ad-box');
@@ -1403,6 +1818,21 @@ function renderActiveEditorBoard() {
     box.addEventListener('mousedown', initiateControlInteraction);
     box.addEventListener('touchstart', initiateControlInteraction, { passive: false });
   });
+
+  // Setup click handler on the unified empty space SVG overlay to trigger ad insert modal form
+  const emptyOverlay = canvas.querySelector('.empty-space-overlay-svg');
+  if (emptyOverlay) {
+    emptyOverlay.addEventListener('click', (e) => {
+      // Avoid triggering when user registers multi-touch drag transitions or clicks an ad block nested inside
+      if (e.target.closest('.ad-box')) return;
+      const rect = canvas.getBoundingClientRect();
+      const dxPx = e.clientX - rect.left;
+      const dyPx = e.clientY - rect.top;
+      const dropXmm = Math.round(dxPx / mmPx);
+      const dropYmm = Math.round(dyPx / mmPx);
+      triggerEmptySpaceClickForm(dropXmm, dropYmm);
+    });
+  }
 
   // Render Sidebar Left Item list
   renderLeftSidebarMenuIndex(page);
@@ -2862,6 +3292,7 @@ async function triggerPageReportPDFExport() {
       const pageH = p.height || 525;
       sumTotalPageAreaMm2 += pageW * pageH;
       p.ads.forEach(ad => {
+        if (ad.category === 'comment') return;
         sumTotalAdAreaMm2 += ad.width * ad.height;
         sumTotalRevenue += Number(ad.revenue || 0);
       });
@@ -2882,7 +3313,9 @@ async function triggerPageReportPDFExport() {
         </tr>
       `);
 
-      if (page.ads.length === 0) {
+      const nonCommentAds = page.ads.filter(ad => ad.category !== 'comment');
+
+      if (nonCommentAds.length === 0) {
         tableRows.push(`
           <tr style="border-bottom: 1.5px solid #cbd5e1; background-color: #ffffff;">
             <td style="padding: 4px 10px; text-align: center; color: #94a3b8; border-right: 1px solid #cbd5e1; font-family: 'Inter', sans-serif; font-weight: bold; font-size: 9px;">
@@ -2892,7 +3325,7 @@ async function triggerPageReportPDFExport() {
           </tr>
         `);
       } else {
-        page.ads.forEach((ad, idx) => {
+        nonCommentAds.forEach((ad, idx) => {
           let categoryLabel = 'Retail';
           if (ad.category === 'classified') categoryLabel = 'Health Care';
           if (ad.category === 'editorial') categoryLabel = 'Real Estate';
@@ -3005,7 +3438,7 @@ async function triggerPageReportPDFExport() {
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
             <span style="color: #000000; font-size: 8.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Total Placed Advt</span>
-            <span style="font-size: 13px; font-weight: 700; color: #16a34a; font-family: 'Space Grotesk', sans-serif;">${state.pages.reduce((acc, p) => acc + p.ads.length, 0)} Ads</span>
+            <span style="font-size: 13px; font-weight: 700; color: #16a34a; font-family: 'Space Grotesk', sans-serif;">${state.pages.reduce((acc, p) => acc + p.ads.filter(a => a.category !== 'comment').length, 0)} Ads</span>
           </div>
           <div style="flex: 1; border-right: 1.5px solid #cbd5e1;">
             <span style="color: #000000; font-size: 8.5px; text-transform: uppercase; display: block; font-weight: 700; font-family: 'Arial Narrow', 'Helvetica Neue', sans-serif-condensed, sans-serif; font-stretch: condensed; letter-spacing: 0.2px;">Average Fill Density</span>
@@ -3041,6 +3474,17 @@ async function triggerPageReportPDFExport() {
 
         let miniAds = '';
         page.ads.forEach(ad => {
+          if (ad.category === 'comment') {
+            miniAds += `
+              <div style="position: absolute; left: ${ad.x * scaleX}px; top: ${ad.y * scaleY}px; width: ${ad.width * scaleX}px; height: ${ad.height * scaleY}px; background-color: rgba(238, 242, 255, 0.95); border: 0.4px solid #4338ca; border-radius: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; padding: 2.5px; text-align: center; line-height: 1.15; z-index: 5;">
+                <span style="font-family: 'Arial Narrow', 'sans-serif-condensed', ui-sans-serif, system-ui, sans-serif; font-size: 5px; font-weight: 850; color: #4338ca; max-width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase;">
+                  ${escapeHtml(ad.client)}
+                </span>
+              </div>
+            `;
+            return;
+          }
+
           const adBg = ad.isTentative ? '#fee2e2' : '#f8fafc';
           const adBorder = ad.isTentative ? '0.4px solid rgba(239, 68, 68, 0.5)' : '0.4px solid rgba(0, 0, 0, 0.25)';
           const adTextColor = ad.isTentative ? '#991b1b' : '#1e293b';
@@ -3058,6 +3502,8 @@ async function triggerPageReportPDFExport() {
           `;
         });
 
+        const pdfEmptySpaces = buildEmptySpaceSVG(page, scaleX, scaleY, false);
+
         const fillPercent = calculatePageFillPercentage(page.id);
 
         const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
@@ -3066,20 +3512,21 @@ async function triggerPageReportPDFExport() {
         overviewHtml += `
           <div style="background-color: #fafbfb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 6px; display: flex; flex-direction: column; align-items: center; width: 108px; box-sizing: border-box;">
             <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
-              <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 8.5px; font-weight: bold; color: #1e293b; display: block;">PAGE ${page.pageNumber}</span>
+               <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 8.5px; font-weight: bold; color: #1e293b; display: block;">PAGE ${page.pageNumber}</span>
               <span style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 6.5px; font-weight: bold; color: ${posColor}; background-color: #f1f5f9; padding: 1px 3px; border-radius: 3px; border: 1px solid #e2e8f0;">${pagePosition}</span>
             </div>
             <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 6.5px; color: #64748b; margin-bottom: 2px; font-weight: 500;">${pageW} &times; ${pageH} mm</span>
             
             <div style="display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; height: ${maxThumbH}px; margin-bottom: 4px; background: transparent;">
-              <div style="position: relative; width: ${thumbW}px; height: ${thumbH}px; background-color: #ffffff; border: 0.4px solid rgba(0, 0, 0, 0.35); border-radius: 0; overflow: hidden; box-shadow: none;">
+               <div style="position: relative; width: ${thumbW}px; height: ${thumbH}px; background-color: #ffffff; border: 0.4px solid rgba(0, 0, 0, 0.35); border-radius: 0; overflow: hidden; box-shadow: none;">
                 ${colGuidelines}
+                ${pdfEmptySpaces}
                 ${miniAds}
               </div>
             </div>
             
             <div style="width: 100%; display: flex; justify-content: space-between; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 7.5px; color: #475569; margin-top: 3px; box-sizing: border-box; line-height: 1;">
-              <span>${page.ads.length} Advt</span>
+              <span>${page.ads.filter(a => a.category !== 'comment').length} Advt</span>
               <span style="font-weight: bold; color: ${fillPercent > 70 ? '#e11d48' : fillPercent > 40 ? '#d97706' : '#2563eb'}">${fillPercent}%</span>
             </div>
           </div>
