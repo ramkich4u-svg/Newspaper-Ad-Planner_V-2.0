@@ -124,6 +124,7 @@ window.renameActiveLayoutPrompt = renameActiveLayoutPrompt;
 window.deleteActiveLayoutConfirm = deleteActiveLayoutConfirm;
 window.openPageSettings = openPageSettings;
 window.triggerDirectSwap = triggerDirectSwap;
+window.triggerPageLayoutRefresh = triggerPageLayoutRefresh;
 
 // Initialize Application on DOM Ready
 if (document.readyState === 'loading') {
@@ -1603,6 +1604,89 @@ function calculatePageAdArea(page) {
   return filledArea;
 }
 
+// Automatically sync page dimensions (height) and ad/edit ratios when ads are modified or removed
+function autoSyncPageDimensionsAndRatios(page) {
+  if (!page) return;
+  const adArea = calculatePageAdArea(page);
+  const w = page.width || 329;
+  let h = page.height || 525;
+
+  if (page.adRatio !== undefined && page.adRatio > 0) {
+    if (adArea > 0) {
+      // Scale height such that adArea takes up exactly adRatio % of page area
+      const rawH = (adArea * 100) / (w * page.adRatio);
+      // Height size must adjust to nearest CM (nearest 10mm) and clamped between 100mm and 525mm
+      const newHeight = Math.min(525, Math.max(100, Math.round(rawH / 10) * 10));
+      
+      if (newHeight !== h) {
+        const deltaHeight = newHeight - h;
+        page.height = newHeight;
+        
+        // Shift existing ads vertically so they remain in bounds or bottom-aligned
+        page.ads.forEach(ad => {
+          ad.y = ad.y + deltaHeight;
+          if (ad.y < 0) ad.y = 0;
+          if (ad.y + ad.height > page.height) {
+            ad.y = page.height - ad.height;
+          }
+        });
+      }
+    }
+    
+    // Recalculate and update the active ratios to keep them exactly correct for the final height
+    const currentH = page.height || 525;
+    page.adRatio = Math.min(99, Math.max(1, Math.round((adArea / (w * currentH)) * 100)));
+    page.editRatio = 100 - page.adRatio;
+  } else {
+    // If no adRatio is saved/defined, calculate actual ratio on the fly
+    const currentH = page.height || 525;
+    page.adRatio = Math.min(99, Math.max(1, Math.round((adArea / (w * currentH)) * 100)));
+    page.editRatio = 100 - page.adRatio;
+  }
+}
+
+// A unified helper to apply and persist modifications to the page layout state
+function applyPageLayoutMutations(page, runAutoSync = false) {
+  if (!page) return;
+  
+  // 1. Recalculate and update the page dimensions and ad/edit ratios ONLY if explicitly requested
+  if (runAutoSync) {
+    autoSyncPageDimensionsAndRatios(page);
+  }
+
+  // 2. Commit the change to the Undo/Redo history stack
+  commitHistory();
+
+  // 3. Save layout silently to Local Storage
+  saveLayoutsToLocalStorageSilently();
+
+  // 4. If this page is currently of the active full page layout editor workspace, refresh it
+  if (state.activePageId === page.id) {
+    autoFitEditorCanvas();
+    renderActiveEditorBoard();
+  }
+
+  // 5. Redraw the main board flatplan thumb layouts
+  renderAllLayouts();
+}
+
+// Explicit handler to manually refresh layout ratios and page sizes upon clicking the "Refresh" button
+function triggerPageLayoutRefresh() {
+  const page = state.pages.find(p => p.id === state.activePageId);
+  if (!page) {
+    showToast("No active page layout found to refresh.", "error");
+    return;
+  }
+  
+  // Recalculate and scale the layout height in accordance with the user-defined adRatio/editRatio
+  autoSyncPageDimensionsAndRatios(page);
+  
+  // Sync the UI and history state (by specifying runAutoSync = false, as we just ran it manually)
+  applyPageLayoutMutations(page, false);
+  
+  showToast("Page height resized and synced as per Ad:Edit Ratio!", "success");
+}
+
 // Synced calculation real-time inside Page Settings form
 function syncPageSettingsRatios(triggerField) {
   const widthInput = document.getElementById('form-page-width');
@@ -2528,7 +2612,7 @@ function endControlInteraction(e) {
       }
 
       if (changeFired) {
-        commitHistory();
+        applyPageLayoutMutations(page);
         showToast("Placement configuration updated", "success");
       }
     } else {
@@ -2980,7 +3064,7 @@ function handleFormAdSubmission(e) {
       adObj.revenue = revenueVal;
       adObj.isTentative = isTentative;
       
-      commitHistory();
+      applyPageLayoutMutations(page);
       showToast(`Ad "${clientName}" updated successfully`, "success");
     }
   } else {
@@ -2999,13 +3083,12 @@ function handleFormAdSubmission(e) {
     };
 
     page.ads.push(newAd);
-    commitHistory();
+    applyPageLayoutMutations(page);
     showToast(`Ad "${clientName}" scheduled successfully`, "success");
   }
 
   // Close dialogues
   closeFormModalAd();
-  renderActiveEditorBoard();
 }
 
 function closeFormModalAd() {
@@ -3022,8 +3105,7 @@ function deleteAdFromPage(adId) {
   if (!ad) return;
 
   page.ads = page.ads.filter(a => a.id !== adId);
-  commitHistory();
-  renderActiveEditorBoard();
+  applyPageLayoutMutations(page);
   showToast(`Ad "${ad.client}" deleted`, "success");
 }
 
@@ -3054,8 +3136,7 @@ function duplicateAdOnActivePage(adId) {
   };
 
   page.ads.push(dupAd);
-  commitHistory();
-  renderActiveEditorBoard();
+  applyPageLayoutMutations(page);
   showToast(`Duplicated scheduled ad layout: "${target.client}"`, "success");
 }
 
@@ -3369,6 +3450,11 @@ function setupEventListeners() {
   const btnPageSettingsHeader = document.getElementById('btn-page-settings-header');
   if (btnPageSettingsHeader) {
     btnPageSettingsHeader.addEventListener('click', () => openPageSettings());
+  }
+
+  const btnRefreshRatios = document.getElementById('btn-refresh-ratios');
+  if (btnRefreshRatios) {
+    btnRefreshRatios.addEventListener('click', triggerPageLayoutRefresh);
   }
 
   const btnSidebarEditComments = document.getElementById('btn-sidebar-edit-comments');
@@ -4052,9 +4138,7 @@ function triggerDirectSwap(adId) {
       targetAd.height = tempH;
 
       // Save changes
-      commitHistory();
-      renderActiveEditorBoard();
-      saveLayoutsToLocalStorageSilently();
+      applyPageLayoutMutations(page);
       showToast(`Positions swapped between "${currentAd.client}" and "${targetAd.client}"!`, "success");
     }
   });
