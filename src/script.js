@@ -1307,11 +1307,24 @@ function buildEmptySpaceSVG(page, scaleX, scaleY, isInteractive = false) {
   const strokeDash = isInteractive ? '5,5' : '1.5,1.5';
 
   mergedH.forEach(line => {
+    // If the line is within 3mm of the top page boundary (margin on top 3 mm), don't draw it
+    if (line.y <= 3) {
+      return;
+    }
     linesSvg += `<line x1="${line.x1 * scaleX}" y1="${line.y * scaleY}" x2="${line.x2 * scaleX}" y2="${line.y * scaleY}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-dasharray="${strokeDash}" />`;
   });
 
   mergedV.forEach(line => {
-    linesSvg += `<line x1="${line.x * scaleX}" y1="${line.y1 * scaleY}" x2="${line.x * scaleX}" y2="${line.y2 * scaleY}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-dasharray="${strokeDash}" />`;
+    let y1 = line.y1;
+    let y2 = line.y2;
+    // Clamp the start y of vertical boundary segments to at least 3mm if they start closer to the top page boundary
+    if (y1 <= 3) {
+      y1 = 3;
+    }
+    if (y1 >= y2) {
+      return;
+    }
+    linesSvg += `<line x1="${line.x * scaleX}" y1="${y1 * scaleY}" x2="${line.x * scaleX}" y2="${y2 * scaleY}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-dasharray="${strokeDash}" />`;
   });
 
   // Single centered label placeholder
@@ -1579,6 +1592,99 @@ function closePageEditor() {
   renderAllLayouts();
 }
 
+// Helper to calculate total active ad area in mm2
+function calculatePageAdArea(page) {
+  let filledArea = 0;
+  if (page && page.ads) {
+    page.ads.forEach(ad => {
+      filledArea += (ad.width || 0) * (ad.height || 0);
+    });
+  }
+  return filledArea;
+}
+
+// Synced calculation real-time inside Page Settings form
+function syncPageSettingsRatios(triggerField) {
+  const widthInput = document.getElementById('form-page-width');
+  const heightInput = document.getElementById('form-page-height');
+  const adInput = document.getElementById('form-page-ad-ratio');
+  const editInput = document.getElementById('form-page-edit-ratio');
+  const infoMsg = document.getElementById('ratio-info-msg');
+
+  if (!widthInput || !heightInput || !adInput || !editInput) return;
+
+  const w = parseInt(widthInput.value, 10) || 329;
+  let h = parseInt(heightInput.value, 10) || 525;
+  let adRatio = parseInt(adInput.value, 10);
+  let editRatio = parseInt(editInput.value, 10);
+
+  const pageId = document.getElementById('form-page-id').value;
+  const page = state.pages.find(p => p.id === pageId);
+  const adArea = calculatePageAdArea(page);
+
+  if (infoMsg) {
+    infoMsg.textContent = `Total Ad Area (Volume): ${adArea.toLocaleString()} mm². Total Page Area: ${(w * h).toLocaleString()} mm².`;
+  }
+
+  if (triggerField === 'ad-ratio') {
+    if (isNaN(adRatio)) return;
+    if (adRatio < 1) adRatio = 1;
+    if (adRatio > 99) adRatio = 99;
+    adInput.value = adRatio;
+
+    editRatio = 100 - adRatio;
+    editInput.value = editRatio;
+
+    if (adArea > 0 && w > 0) {
+      // Scale height such that adArea takes up exactly adRatio % of page area
+      // formula: adArea = (w * h) * (adRatio / 100) -> h = (adArea * 100) / (w * adRatio)
+      // Height size must adjust to nearest CM (nearest 10mm)
+      const rawH = (adArea * 100) / (w * adRatio);
+      h = Math.min(1200, Math.max(100, Math.round(rawH / 10) * 10));
+      heightInput.value = h;
+      if (infoMsg) {
+        infoMsg.textContent = `Total Ad Area (Volume): ${adArea.toLocaleString()} mm². Total Page Area: ${(w * h).toLocaleString()} mm² (height adjusted to nearest CM).`;
+      }
+    }
+  } else if (triggerField === 'edit-ratio') {
+    if (isNaN(editRatio)) return;
+    if (editRatio < 1) editRatio = 1;
+    if (editRatio > 99) editRatio = 99;
+    editInput.value = editRatio;
+
+    adRatio = 100 - editRatio;
+    adInput.value = adRatio;
+
+    if (adArea > 0 && w > 0) {
+      // Height size must adjust to nearest CM (nearest 10mm)
+      const rawH = (adArea * 100) / (w * adRatio);
+      h = Math.min(1200, Math.max(100, Math.round(rawH / 10) * 10));
+      heightInput.value = h;
+      if (infoMsg) {
+        infoMsg.textContent = `Total Ad Area (Volume): ${adArea.toLocaleString()} mm². Total Page Area: ${(w * h).toLocaleString()} mm² (height adjusted to nearest CM).`;
+      }
+    }
+  } else if (triggerField === 'width') {
+    if (adArea > 0 && w > 0 && !isNaN(adRatio)) {
+      // Height size must adjust to nearest CM (nearest 10mm) to remain in sync on page dimensions input
+      const rawH = (adArea * 100) / (w * adRatio);
+      h = Math.min(1200, Math.max(100, Math.round(rawH / 10) * 10));
+      heightInput.value = h;
+      if (infoMsg) {
+        infoMsg.textContent = `Total Ad Area (Volume): ${adArea.toLocaleString()} mm². Total Page Area: ${(w * h).toLocaleString()} mm² (height adjusted to nearest CM).`;
+      }
+    }
+  } else if (triggerField === 'height') {
+    if (adArea > 0 && w > 0 && h > 0) {
+      // Recalculate ratios based on the modified height
+      adRatio = Math.min(99, Math.max(1, Math.round((adArea / (w * h)) * 100)));
+      editRatio = 100 - adRatio;
+      adInput.value = adRatio;
+      editInput.value = editRatio;
+    }
+  }
+}
+
 // Open Page Space Settings and Comments Configuration
 function openPageSettings(pageId) {
   const targetId = pageId || state.activePageId;
@@ -1599,14 +1705,42 @@ function openPageSettings(pageId) {
   const positionInput = document.getElementById('form-page-position');
   if (positionInput) positionInput.value = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
 
+  const width = page.width || 329;
+  const height = page.height || 525;
+
   const widthInput = document.getElementById('form-page-width');
-  if (widthInput) widthInput.value = page.width || 329;
+  if (widthInput) widthInput.value = width;
 
   const heightInput = document.getElementById('form-page-height');
-  if (heightInput) heightInput.value = page.height || 525;
+  if (heightInput) heightInput.value = height;
 
   const commentsText = document.getElementById('form-page-comments');
   if (commentsText) commentsText.value = page.comments || '';
+
+  // Calculate init ratios
+  const adArea = calculatePageAdArea(page);
+  let adRatio = page.adRatio;
+  let editRatio = page.editRatio;
+
+  if (adRatio === undefined || editRatio === undefined) {
+    if (adArea > 0) {
+      adRatio = Math.min(99, Math.max(1, Math.round((adArea / (width * height)) * 100)));
+      editRatio = 100 - adRatio;
+    } else {
+      adRatio = 40;
+      editRatio = 60;
+    }
+  }
+
+  const adInput = document.getElementById('form-page-ad-ratio');
+  const editInput = document.getElementById('form-page-edit-ratio');
+  if (adInput) adInput.value = adRatio;
+  if (editInput) editInput.value = editRatio;
+
+  const infoMsg = document.getElementById('ratio-info-msg');
+  if (infoMsg) {
+    infoMsg.textContent = `Total Ad Area: ${adArea.toLocaleString()} mm². Total Page Area: ${(width * height).toLocaleString()} mm².`;
+  }
 
   modal.classList.remove('hidden');
 }
@@ -1628,8 +1762,14 @@ function handlePageSettingsFormSubmit(e) {
 
   const position = document.getElementById('form-page-position').value;
   const width = parseInt(document.getElementById('form-page-width').value, 10);
-  const height = parseInt(document.getElementById('form-page-height').value, 10);
+  let height = parseInt(document.getElementById('form-page-height').value, 10);
+  if (!isNaN(height)) {
+    height = Math.round(height / 10) * 10;
+  }
   const comments = document.getElementById('form-page-comments').value;
+
+  const adRatio = parseInt(document.getElementById('form-page-ad-ratio').value, 10);
+  const editRatio = parseInt(document.getElementById('form-page-edit-ratio').value, 10);
 
   if (isNaN(width) || width < 100 || width > 800) {
     showToast("Width must be between 100mm and 800mm", "error");
@@ -1637,6 +1777,10 @@ function handlePageSettingsFormSubmit(e) {
   }
   if (isNaN(height) || height < 100 || height > 1200) {
     showToast("Height must be between 100mm and 1200mm", "error");
+    return;
+  }
+  if (isNaN(adRatio) || isNaN(editRatio) || adRatio + editRatio !== 100) {
+    showToast("AD Ratio and EDIT Ratio must sum to exactly 100%", "error");
     return;
   }
 
@@ -1664,6 +1808,8 @@ function handlePageSettingsFormSubmit(e) {
   page.width = width;
   page.height = height;
   page.comments = comments;
+  page.adRatio = adRatio;
+  page.editRatio = editRatio;
 
   closePageSettings();
   commitHistory();
@@ -3213,6 +3359,32 @@ function setupEventListeners() {
   const pageSettingsForm = document.getElementById('page-settings-form');
   if (pageSettingsForm) {
     pageSettingsForm.addEventListener('submit', handlePageSettingsFormSubmit);
+  }
+
+  // Bind real-time input listeners to sync dimensions and ratios reactively
+  const pageWidthInput = document.getElementById('form-page-width');
+  const pageHeightInput = document.getElementById('form-page-height');
+  const pageAdRatioInput = document.getElementById('form-page-ad-ratio');
+  const pageEditRatioInput = document.getElementById('form-page-edit-ratio');
+
+  if (pageWidthInput) {
+    pageWidthInput.addEventListener('input', () => syncPageSettingsRatios('width'));
+  }
+  if (pageHeightInput) {
+    pageHeightInput.addEventListener('input', () => syncPageSettingsRatios('height'));
+    pageHeightInput.addEventListener('blur', () => {
+      let val = parseInt(pageHeightInput.value, 10);
+      if (!isNaN(val)) {
+        pageHeightInput.value = Math.min(1200, Math.max(100, Math.round(val / 10) * 10));
+        syncPageSettingsRatios('height');
+      }
+    });
+  }
+  if (pageAdRatioInput) {
+    pageAdRatioInput.addEventListener('input', () => syncPageSettingsRatios('ad-ratio'));
+  }
+  if (pageEditRatioInput) {
+    pageEditRatioInput.addEventListener('input', () => syncPageSettingsRatios('edit-ratio'));
   }
 }
 
