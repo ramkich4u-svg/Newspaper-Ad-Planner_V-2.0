@@ -1613,8 +1613,31 @@ function syncPageSettingsRatios(triggerField) {
 
   if (!widthInput || !heightInput || !adInput || !editInput) return;
 
-  const w = parseInt(widthInput.value, 10) || 329;
-  let h = parseInt(heightInput.value, 10) || 525;
+  let w = parseInt(widthInput.value, 10);
+  let h = parseInt(heightInput.value, 10);
+  let exceeded = false;
+  let exceedMsg = "";
+
+  if (!isNaN(w) && w > 329) {
+    widthInput.value = 329;
+    w = 329;
+    exceeded = true;
+    exceedMsg = "Page width cannot exceed the maximum original size (329 mm)!";
+  }
+  if (!isNaN(h) && h > 525) {
+    heightInput.value = 525;
+    h = 525;
+    exceeded = true;
+    exceedMsg = "Page height cannot exceed the maximum original size (525 mm)!";
+  }
+
+  if (exceeded) {
+    showToast(exceedMsg, "error");
+  }
+
+  if (isNaN(w)) w = 329;
+  if (isNaN(h)) h = 525;
+
   let adRatio = parseInt(adInput.value, 10);
   let editRatio = parseInt(editInput.value, 10);
 
@@ -1638,9 +1661,9 @@ function syncPageSettingsRatios(triggerField) {
     if (adArea > 0 && w > 0) {
       // Scale height such that adArea takes up exactly adRatio % of page area
       // formula: adArea = (w * h) * (adRatio / 100) -> h = (adArea * 100) / (w * adRatio)
-      // Height size must adjust to nearest CM (nearest 10mm)
+      // Height size must adjust to nearest CM (nearest 10mm) but never exceed 525mm
       const rawH = (adArea * 100) / (w * adRatio);
-      h = Math.min(1200, Math.max(100, Math.round(rawH / 10) * 10));
+      h = Math.min(525, Math.max(100, Math.round(rawH / 10) * 10));
       heightInput.value = h;
       if (infoMsg) {
         infoMsg.textContent = `Total Ad Area (Volume): ${adArea.toLocaleString()} mm². Total Page Area: ${(w * h).toLocaleString()} mm² (height adjusted to nearest CM).`;
@@ -1656,9 +1679,9 @@ function syncPageSettingsRatios(triggerField) {
     adInput.value = adRatio;
 
     if (adArea > 0 && w > 0) {
-      // Height size must adjust to nearest CM (nearest 10mm)
+      // Height size must adjust to nearest CM (nearest 10mm) but never exceed 525mm
       const rawH = (adArea * 100) / (w * adRatio);
-      h = Math.min(1200, Math.max(100, Math.round(rawH / 10) * 10));
+      h = Math.min(525, Math.max(100, Math.round(rawH / 10) * 10));
       heightInput.value = h;
       if (infoMsg) {
         infoMsg.textContent = `Total Ad Area (Volume): ${adArea.toLocaleString()} mm². Total Page Area: ${(w * h).toLocaleString()} mm² (height adjusted to nearest CM).`;
@@ -1666,9 +1689,9 @@ function syncPageSettingsRatios(triggerField) {
     }
   } else if (triggerField === 'width') {
     if (adArea > 0 && w > 0 && !isNaN(adRatio)) {
-      // Height size must adjust to nearest CM (nearest 10mm) to remain in sync on page dimensions input
+      // Height size must adjust to nearest CM (nearest 10mm) to remain in sync on page dimensions input but never exceed 525mm
       const rawH = (adArea * 100) / (w * adRatio);
-      h = Math.min(1200, Math.max(100, Math.round(rawH / 10) * 10));
+      h = Math.min(525, Math.max(100, Math.round(rawH / 10) * 10));
       heightInput.value = h;
       if (infoMsg) {
         infoMsg.textContent = `Total Ad Area (Volume): ${adArea.toLocaleString()} mm². Total Page Area: ${(w * h).toLocaleString()} mm² (height adjusted to nearest CM).`;
@@ -1764,19 +1787,26 @@ function handlePageSettingsFormSubmit(e) {
   const width = parseInt(document.getElementById('form-page-width').value, 10);
   let height = parseInt(document.getElementById('form-page-height').value, 10);
   if (!isNaN(height)) {
-    height = Math.round(height / 10) * 10;
+    if (height !== 525) {
+      height = Math.round(height / 10) * 10;
+    }
+    if (height > 525) {
+      height = 525;
+    }
   }
   const comments = document.getElementById('form-page-comments').value;
 
   const adRatio = parseInt(document.getElementById('form-page-ad-ratio').value, 10);
   const editRatio = parseInt(document.getElementById('form-page-edit-ratio').value, 10);
 
-  if (isNaN(width) || width < 100 || width > 800) {
-    showToast("Width must be between 100mm and 800mm", "error");
+  if (isNaN(width) || width < 100 || width > 329) {
+    const msg = "Page width cannot exceed the maximum original size (329 mm)!";
+    showToast(msg, "error");
     return;
   }
-  if (isNaN(height) || height < 100 || height > 1200) {
-    showToast("Height must be between 100mm and 1200mm", "error");
+  if (isNaN(height) || height < 100 || height > 525) {
+    const msg = "Page height cannot exceed the maximum original size (525 mm)!";
+    showToast(msg, "error");
     return;
   }
   if (isNaN(adRatio) || isNaN(editRatio) || adRatio + editRatio !== 100) {
@@ -3369,13 +3399,21 @@ function setupEventListeners() {
 
   if (pageWidthInput) {
     pageWidthInput.addEventListener('input', () => syncPageSettingsRatios('width'));
+    pageWidthInput.addEventListener('blur', () => {
+      let val = parseInt(pageWidthInput.value, 10);
+      if (!isNaN(val)) {
+        pageWidthInput.value = Math.min(329, Math.max(100, val));
+        syncPageSettingsRatios('width');
+      }
+    });
   }
   if (pageHeightInput) {
     pageHeightInput.addEventListener('input', () => syncPageSettingsRatios('height'));
     pageHeightInput.addEventListener('blur', () => {
       let val = parseInt(pageHeightInput.value, 10);
       if (!isNaN(val)) {
-        pageHeightInput.value = Math.min(1200, Math.max(100, Math.round(val / 10) * 10));
+        let rounded = val !== 525 ? Math.round(val / 10) * 10 : 525;
+        pageHeightInput.value = Math.min(525, Math.max(100, rounded));
         syncPageSettingsRatios('height');
       }
     });
@@ -3879,6 +3917,15 @@ function showToast(message, type = "success") {
     colors = 'bg-white border-rose-200 text-slate-800 shadow-xl';
     badgeColor = 'bg-rose-50 text-rose-600';
     title = 'System Warning';
+    
+    // Trigger fully-featured custom alert dialog modal (iframe-safe and highly polished UI)
+    showCustomDialog({
+      title: "System Warning",
+      message: message,
+      confirmText: "Acknowledge",
+      theme: "red",
+      hideCancel: true
+    });
   }
 
   // Create Toast
