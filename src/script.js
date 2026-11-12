@@ -77,6 +77,7 @@ let state = {
   pages: [],
   activePageId: null,
   zoom: 1.0,
+  thumbnailView: localStorage.getItem('newspaper_ad_planner_thumbnail_view') || 'big',
   history: [],
   historyIndex: -1
 };
@@ -125,6 +126,7 @@ window.deleteActiveLayoutConfirm = deleteActiveLayoutConfirm;
 window.openPageSettings = openPageSettings;
 window.triggerDirectSwap = triggerDirectSwap;
 window.triggerPageLayoutRefresh = triggerPageLayoutRefresh;
+window.setThumbnailView = setThumbnailView;
 
 // Initialize Application on DOM Ready
 if (document.readyState === 'loading') {
@@ -720,6 +722,57 @@ function moveAdToAlternativePage(fromPageId, adId, toPageId) {
 }
 
 // =========================================================================
+// THUMBNAIL VIEW MODES: BIG (4/row) & SMALL (8/row)
+// =========================================================================
+
+function setThumbnailView(mode) {
+  state.thumbnailView = mode;
+  try {
+    localStorage.setItem('newspaper_ad_planner_thumbnail_view', mode);
+  } catch (e) {
+    console.error("Storage error:", e);
+  }
+  updateThumbnailViewUI();
+  renderAllLayouts();
+}
+
+function updateThumbnailViewUI() {
+  const isSmall = state.thumbnailView === 'small';
+  const btnBig = document.getElementById('btn-view-big');
+  const btnSmall = document.getElementById('btn-view-small');
+  const grid = document.getElementById('pages-grid');
+  const mainContainer = document.querySelector('main');
+
+  if (btnBig && btnSmall) {
+    if (isSmall) {
+      btnSmall.className = "px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer bg-white text-blue-600 shadow-xs";
+      btnBig.className = "px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer text-slate-600 hover:text-slate-900";
+    } else {
+      btnBig.className = "px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer bg-white text-blue-600 shadow-xs";
+      btnSmall.className = "px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer text-slate-600 hover:text-slate-900";
+    }
+  }
+
+  if (grid) {
+    if (isSmall) {
+      grid.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3";
+    } else {
+      grid.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6";
+    }
+  }
+
+  if (mainContainer) {
+    if (isSmall) {
+      mainContainer.classList.remove('max-w-7xl');
+      mainContainer.classList.add('max-w-[1920px]');
+    } else {
+      mainContainer.classList.remove('max-w-[1920px]');
+      mainContainer.classList.add('max-w-7xl');
+    }
+  }
+}
+
+// =========================================================================
 // RENDER FLATPLAN GALLERY (DASHBOARD GRID)
 // =========================================================================
 
@@ -739,6 +792,9 @@ function renderAllLayouts() {
   const badgeLayoutCenters = document.getElementById('badge-layout-centers');
 
   if (!grid) return;
+
+  // Sync Thumbnail View mode classes & buttons
+  updateThumbnailViewUI();
 
   // Render Stats calculations
   const totalPages = state.pages.length;
@@ -823,17 +879,23 @@ function renderAllLayouts() {
   grid.innerHTML = '';
 
   // Render each page card flatplan
+  const isSmall = state.thumbnailView === 'small';
+
   state.pages.forEach(page => {
     const pageCard = document.createElement('div');
-    pageCard.className = "group bg-white border border-slate-200/80 rounded-xl overflow-hidden p-4 flex flex-col shadow-sm hover:shadow-md hover:border-blue-500/30 transition-all";
+    pageCard.className = isSmall 
+      ? "group bg-white border border-slate-200/80 rounded-lg overflow-hidden p-2 flex flex-col shadow-xs hover:shadow-md hover:border-blue-500/30 transition-all text-xs" 
+      : "group bg-white border border-slate-200/80 rounded-xl overflow-hidden p-4 flex flex-col shadow-sm hover:shadow-md hover:border-blue-500/30 transition-all";
     pageCard.id = "flatplan-card-" + page.id;
 
     const pageW = page.width || 329;
     const pageH = page.height || 525;
 
-    // Mini preview visual ads boxes scale (container max width: 180px, max height: 287px with padding)
-    const maxWidth = 156;
-    const maxHeight = 263;
+    // Mini preview visual ads boxes scale:
+    // Big: maxWidth 156, maxHeight 263 (wrapper 180x287)
+    // Small: maxWidth 90, maxHeight 144 (wrapper max 108x160)
+    const maxWidth = isSmall ? 90 : 156;
+    const maxHeight = isSmall ? 144 : 263;
     const pageRatio = pageW / pageH;
     const maxRatio = maxWidth / maxHeight;
     
@@ -859,6 +921,9 @@ function renderAllLayouts() {
     }
     
     let miniAdsHtml = '';
+    const labelFontSize = isSmall ? '6.5px' : '8px';
+    const labelScale = isSmall ? 'scale(0.72)' : 'scale(0.8)';
+
     page.ads.forEach(ad => {
       let catColor = '#2563eb';
       if (ad.category === 'classified') catColor = '#059669';
@@ -868,15 +933,20 @@ function renderAllLayouts() {
       if (ad.category === 'special') catColor = '#9333ea';
 
       let bgStyle = `background-color:${catColor}14; border-color:${catColor};`;
+      let clientTextColor = '#1e293b';
       if (ad.isTentative) {
         bgStyle = `background-color:#fee2e2; border-color:#f43f5e;`;
+      }
+      if (ad.isMasthead) {
+        bgStyle = `background-color:#334155; border-color:#0f172a;`;
+        clientTextColor = '#ffffff';
       }
 
       miniAdsHtml += `
         <div class="absolute rounded-[1px] border border-opacity-70 flex flex-col justify-center items-center overflow-hidden" 
              style="left:${ad.x * thumbScaleX}px; top:${ad.y * thumbScaleY}px; width:${ad.width * thumbScaleX}px; height:${ad.height * thumbScaleY}px; ${bgStyle}">
-          <span style="font-size: 8px; transform: scale(0.8); line-height: 1; color: #1e293b; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; font-weight: 700;">
-            ${ad.client}
+          <span style="font-size: ${labelFontSize}; transform: ${labelScale}; line-height: 1; color: ${clientTextColor}; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; font-weight: 700;">
+            ${escapeHtml(ad.client)}
           </span>
         </div>
       `;
@@ -888,125 +958,249 @@ function renderAllLayouts() {
 
     let adListHtml = '';
     if (page.ads.length === 0) {
-      adListHtml = `<p class="text-[9px] text-slate-400 italic text-center py-2 bg-slate-50 border border-dashed border-slate-200/60 rounded-lg">No Advertisements on this layout</p>`;
+      adListHtml = isSmall
+        ? `<p class="text-[8px] text-slate-400 italic text-center py-1 bg-slate-50 border border-dashed border-slate-200/60 rounded">No Ads</p>`
+        : `<p class="text-[9px] text-slate-400 italic text-center py-2 bg-slate-50 border border-dashed border-slate-200/60 rounded-lg">No Advertisements on this layout</p>`;
     } else {
       let adItemsHtml = '';
       page.ads.forEach(ad => {
         let catColor = '#2563eb';
         let catText = 'Retail';
-        if (ad.category === 'classified') { catColor = '#059669'; catText = 'Health Care'; }
-        if (ad.category === 'editorial') { catColor = '#ea580c'; catText = 'Real Estate'; }
-        if (ad.category === 'political') { catColor = '#c026d3'; catText = 'Education'; }
-        if (ad.category === 'finance') { catColor = '#4f46e5'; catText = 'B2B'; }
-        if (ad.category === 'special') { catColor = '#9333ea'; catText = ad.customCategoryName || 'Others'; }
+        if (ad.isMasthead) { catColor = '#475569'; catText = 'Masthead (Edit)'; }
+        else if (ad.category === 'classified') { catColor = '#059669'; catText = 'Health Care'; }
+        else if (ad.category === 'editorial') { catColor = '#ea580c'; catText = 'Real Estate'; }
+        else if (ad.category === 'political') { catColor = '#c026d3'; catText = 'Education'; }
+        else if (ad.category === 'finance') { catColor = '#4f46e5'; catText = 'B2B'; }
+        else if (ad.category === 'special') { catColor = '#9333ea'; catText = ad.customCategoryName || 'Others'; }
 
         let pageOptions = state.pages.map(p => {
           if (p.id === page.id) return '';
           return `<option value="${p.id}">Page ${p.pageNumber}</option>`;
         }).join('');
 
-        let tentativeBadge = ad.isTentative ? '<span class="text-[7.5px] font-sans font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded scale-90 flex-shrink-0">TENTATIVE</span>' : '';
+        let badgeHtml = '';
+        if (ad.isMasthead) {
+          badgeHtml = isSmall 
+            ? '<span class="text-[7px] font-sans font-bold text-slate-100 bg-slate-800 border border-slate-700 px-0.5 rounded flex-shrink-0">M</span>'
+            : '<span class="text-[7.5px] font-sans font-bold text-slate-100 bg-slate-800 border border-slate-700 px-1 py-0.2 rounded scale-90 flex-shrink-0">MASTHEAD</span>';
+        } else if (ad.isTentative) {
+          badgeHtml = isSmall
+            ? '<span class="text-[7px] font-sans font-bold text-rose-600 bg-rose-50 border border-rose-200 px-0.5 rounded flex-shrink-0">T</span>'
+            : '<span class="text-[7.5px] font-sans font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded scale-90 flex-shrink-0">TENTATIVE</span>';
+        }
 
-        adItemsHtml += `
-          <div class="flex items-center justify-between text-[10px] bg-white p-1.5 rounded border border-slate-150 shadow-sm gap-1 hover:border-slate-300">
-            <div class="flex items-center gap-1.5 min-w-0 flex-1">
-              <span class="w-1.5 h-3 rounded-full flex-shrink-0" style="background-color: ${catColor};" title="${catText}"></span>
-              <div class="truncate leading-tight flex-1">
-                <p class="font-bold text-slate-700 truncate flex items-center gap-1">
-                  <span class="truncate">${escapeHtml(ad.client)}</span>
-                  ${tentativeBadge}
-                </p>
-                <p class="text-[8px] text-slate-400 font-mono">${ad.width}x${ad.height}mm${ad.revenue ? ` • ₹${ad.revenue.toLocaleString()}` : ''}</p>
+        const metricsInfo = ad.isMasthead 
+          ? (isSmall ? `${ad.width}x${ad.height} (Edit)` : `${ad.width}x${ad.height}mm &bull; Edit Space`)
+          : (isSmall 
+              ? `${ad.width}x${ad.height}mm` 
+              : `${ad.width}x${ad.height}mm${ad.revenue ? ` &bull; ₹${ad.revenue.toLocaleString()}` : ''}`);
+
+        if (isSmall) {
+          adItemsHtml += `
+            <div class="flex items-center justify-between text-[8.5px] bg-white p-1 rounded border border-slate-150 shadow-2xs gap-1 hover:border-slate-300">
+              <div class="flex items-center gap-1 min-w-0 flex-1">
+                <span class="w-1 h-2 rounded-full flex-shrink-0" style="background-color: ${catColor};" title="${catText}"></span>
+                <div class="truncate leading-tight flex-1">
+                  <p class="font-bold text-slate-700 truncate flex items-center gap-0.5">
+                    <span class="truncate">${escapeHtml(ad.client)}</span>
+                    ${badgeHtml}
+                  </p>
+                  <p class="text-[7px] text-slate-400 font-mono">${metricsInfo}</p>
+                </div>
               </div>
+              <select onchange="event.stopPropagation(); moveAdToAlternativePage('${page.id}', '${ad.id}', this.value)" class="text-[8px] border border-slate-200 rounded px-1 py-0.2 bg-slate-50 hover:bg-slate-100 text-slate-500 cursor-pointer focus:ring-1 focus:ring-blue-500 font-medium max-w-[48px]">
+                <option value="" disabled selected>Move</option>
+                ${pageOptions}
+              </select>
             </div>
-            <select onchange="event.stopPropagation(); moveAdToAlternativePage('${page.id}', '${ad.id}', this.value)" class="text-[9px] border border-slate-200 rounded px-1.5 py-0.5 bg-slate-50 hover:bg-slate-100 text-slate-500 cursor-pointer focus:ring-1 focus:ring-blue-500 font-medium">
-              <option value="" disabled selected>Move to...</option>
-              ${pageOptions}
-            </select>
-          </div>
-        `;
+          `;
+        } else {
+          adItemsHtml += `
+            <div class="flex items-center justify-between text-[10px] bg-white p-1.5 rounded border border-slate-150 shadow-sm gap-1 hover:border-slate-300">
+              <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                <span class="w-1.5 h-3 rounded-full flex-shrink-0" style="background-color: ${catColor};" title="${catText}"></span>
+                <div class="truncate leading-tight flex-1">
+                  <p class="font-bold text-slate-700 truncate flex items-center gap-1">
+                    <span class="truncate">${escapeHtml(ad.client)}</span>
+                    ${badgeHtml}
+                  </p>
+                  <p class="text-[8px] text-slate-400 font-mono">${metricsInfo}</p>
+                </div>
+              </div>
+              <select onchange="event.stopPropagation(); moveAdToAlternativePage('${page.id}', '${ad.id}', this.value)" class="text-[9px] border border-slate-200 rounded px-1.5 py-0.5 bg-slate-50 hover:bg-slate-100 text-slate-500 cursor-pointer focus:ring-1 focus:ring-blue-500 font-medium">
+                <option value="" disabled selected>Move to...</option>
+                ${pageOptions}
+              </select>
+            </div>
+          `;
+        }
       });
-      adListHtml = `<div class="space-y-1 max-h-[120px] overflow-y-auto pr-0.5">${adItemsHtml}</div>`;
+      const listMaxH = isSmall ? 'max-h-[80px]' : 'max-h-[120px]';
+      adListHtml = `<div class="space-y-1 ${listMaxH} overflow-y-auto pr-0.5">${adItemsHtml}</div>`;
     }
 
     // Page comments / notes preview element
     let commentHtml = '';
     if (page.comments && page.comments.trim().length > 0) {
-      commentHtml = `
-        <div class="mt-2 text-[10px] text-amber-850 bg-amber-50/40 hover:bg-amber-50 p-2 rounded-lg border border-amber-100/50 shadow-inner flex gap-1.5 items-start">
-          <span class="flex-shrink-0 text-amber-500 font-bold select-none">💬</span>
-          <span class="italic max-h-[48px] overflow-hidden text-ellipsis line-clamp-2" title="${escapeHtml(page.comments)}">${escapeHtml(page.comments)}</span>
-        </div>
-      `;
+      if (isSmall) {
+        commentHtml = `
+          <div class="mt-1 text-[8.5px] text-amber-850 bg-amber-50/50 p-1 rounded border border-amber-100/50 flex gap-1 items-start">
+            <span class="flex-shrink-0 text-amber-500 font-bold select-none text-[8px]">💬</span>
+            <span class="italic max-h-[32px] overflow-hidden text-ellipsis line-clamp-2" title="${escapeHtml(page.comments)}">${escapeHtml(page.comments)}</span>
+          </div>
+        `;
+      } else {
+        commentHtml = `
+          <div class="mt-2 text-[10px] text-amber-850 bg-amber-50/40 hover:bg-amber-50 p-2 rounded-lg border border-amber-100/50 shadow-inner flex gap-1.5 items-start">
+            <span class="flex-shrink-0 text-amber-500 font-bold select-none">💬</span>
+            <span class="italic max-h-[48px] overflow-hidden text-ellipsis line-clamp-2" title="${escapeHtml(page.comments)}">${escapeHtml(page.comments)}</span>
+          </div>
+        `;
+      }
     }
 
     const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
+    let posBadgeClass = 'bg-purple-50 text-purple-700 border border-purple-200';
+    if (pagePosition === 'LEFT') {
+      posBadgeClass = 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+    } else if (pagePosition === 'RIGHT') {
+      posBadgeClass = 'bg-purple-50 text-purple-700 border border-purple-200';
+    } else if (pagePosition === 'Front Page') {
+      posBadgeClass = 'bg-rose-50 text-rose-700 border border-rose-300 font-semibold';
+    } else if (pagePosition.includes('Jacket 1')) {
+      posBadgeClass = 'bg-amber-50 text-amber-800 border border-amber-300 font-semibold';
+    } else if (pagePosition.includes('Jacket 2')) {
+      posBadgeClass = 'bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold';
+    }
 
-    pageCard.innerHTML = `
-      <!-- Card Title -->
-      <div class="flex items-center justify-between mb-2">
-        <div class="flex items-center gap-1.5">
-          <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">Page ${page.pageNumber}</span>
-          <span class="text-[9px] font-bold px-1 py-0.5 rounded ${pagePosition === 'LEFT' ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-purple-50 text-purple-600 border border-purple-200'}">${pagePosition}</span>
+    if (isSmall) {
+      pageCard.innerHTML = `
+        <!-- Card Title -->
+        <div class="flex items-center justify-between mb-1.5 min-w-0">
+          <div class="flex items-center gap-1 min-w-0 flex-1">
+            <span class="text-[11px] font-bold text-slate-800 tracking-tight uppercase truncate">P${page.pageNumber}</span>
+            <span class="text-[8px] font-bold px-1 py-0.2 rounded shadow-2xs truncate ${posBadgeClass}">${pagePosition}</span>
+          </div>
+          <span class="text-[8px] font-mono font-bold text-slate-500 bg-slate-100/60 px-1 py-0.2 rounded border border-slate-200/40 flex-shrink-0" title="Broad Sheet">BS</span>
         </div>
-        <span class="text-[10px] font-mono font-bold text-slate-500 bg-slate-100/60 px-1.5 py-0.5 rounded border border-slate-200/40">Broad Sheet</span>
-      </div>
 
-      <!-- Thumbnail Wrapper with hover editors overlays -->
-      <div class="relative mx-auto rounded bg-slate-50 border border-slate-200 overflow-hidden flex flex-col items-center justify-end pb-3 shadow-inner mb-3 cursor-pointer group-hover:shadow-blue-500/5 transition-shadow" style="width: 180px; height: 287px;" onclick="openPageEditor('${page.id}')">
-        <!-- Perfectly-centered crisp thumbnail with visible borders on all sides -->
-        <div class="relative border border-slate-950 bg-white overflow-hidden shadow-md" style="width: ${thumbW}px; height: ${thumbH}px;">
-          <!-- 8-Column dashed guidelines -->
-          ${thumbColLinesHtml}
-          ${miniEmptySpacesHtml}
-          ${miniAdsHtml}
-        </div>
-        
-        <!-- Hover visual overlay layout buttons -->
-        <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2.5 transition-opacity duration-150 rounded">
-          <button class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-[11px] font-bold text-white shadow-lg shadow-blue-600/20 flex items-center gap-1.5 transition-transform scale-90 group-hover:scale-100 cursor-pointer">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-            Edit Layout
-          </button>
-          <div class="flex gap-1 box-border">
-            <button class="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-100 font-medium cursor-pointer" onclick="event.stopPropagation(); duplicatePageLayout('${page.id}')" title="Duplicate physical page and active ads">Duplicate</button>
-            <button class="p-1 px-2.5 bg-red-700 hover:bg-red-800 rounded text-[10px] text-white font-medium cursor-pointer" onclick="event.stopPropagation(); deletePageLayout('${page.id}')" title="Delete page permanently">Delete</button>
+        <!-- Thumbnail Wrapper with hover editors overlays -->
+        <div class="relative mx-auto rounded bg-slate-50 border border-slate-200 overflow-hidden flex flex-col items-center justify-end pb-1.5 shadow-inner mb-2 cursor-pointer group-hover:shadow-blue-500/5 transition-shadow" style="width: 100%; max-width: 108px; height: 160px;" onclick="openPageEditor('${page.id}')">
+          <!-- Perfectly-centered crisp thumbnail with visible borders on all sides -->
+          <div class="relative border border-slate-950 bg-white overflow-hidden shadow-2xs" style="width: ${thumbW}px; height: ${thumbH}px;">
+            <!-- 8-Column dashed guidelines -->
+            ${thumbColLinesHtml}
+            ${miniEmptySpacesHtml}
+            ${miniAdsHtml}
+          </div>
+          
+          <!-- Hover visual overlay layout buttons -->
+          <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1.5 transition-opacity duration-150 rounded p-1">
+            <button class="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 rounded text-[9px] font-bold text-white shadow flex items-center gap-1 cursor-pointer">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+              Edit
+            </button>
+            <div class="flex gap-1 box-border">
+              <button class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[8px] text-slate-100 font-medium cursor-pointer" onclick="event.stopPropagation(); duplicatePageLayout('${page.id}')" title="Duplicate physical page and active ads">Dup</button>
+              <button class="px-1.5 py-0.5 bg-red-700 hover:bg-red-800 rounded text-[8px] text-white font-medium cursor-pointer" onclick="event.stopPropagation(); deletePageLayout('${page.id}')" title="Delete page permanently">Del</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Detail elements summary row -->
-      <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-mono mb-1.5">
-        <span class="flex items-center gap-1">
-          <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-          ${page.ads.length} Advertisements
-        </span>
-        <span class="${pagePercentOccupied > 70 ? 'text-rose-600 font-bold' : pagePercentOccupied > 40 ? 'text-amber-600 font-semibold' : 'text-blue-600 font-semibold'}">
-          ${pagePercentOccupied}% Advt Space Filled
-        </span>
-      </div>
-
-      <!-- Space details & Configure trigger Row -->
-      <div class="text-[10px] text-slate-400 flex justify-between items-center gap-1 font-mono mb-2">
-        <div class="flex items-center gap-1 flex-wrap">
-          <span class="bg-slate-100/70 px-1 py-0.5 rounded border border-slate-200/40 font-semibold" title="Dimensions">${pageW} &times; ${pageH} mm</span>
-          <span class="bg-blue-50/80 text-blue-700 px-1 py-0.5 rounded border border-blue-200/30 font-bold" title="Total Page Volume">${((pageW * pageH) / 100).toLocaleString(undefined, { maximumFractionDigits: 1 })} Sqcm</span>
+        <!-- Detail elements summary row -->
+        <div class="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-500 font-mono mb-1">
+          <span class="truncate">
+            ${page.ads.length} Ads
+          </span>
+          <span class="${pagePercentOccupied > 70 ? 'text-rose-600 font-bold' : pagePercentOccupied > 40 ? 'text-amber-600 font-semibold' : 'text-blue-600 font-semibold'}">
+            ${pagePercentOccupied}% Filled
+          </span>
         </div>
-        <button class="p-1 px-1.5 hover:bg-slate-50 text-[9px] hover:text-slate-800 text-slate-500 border border-slate-200/80 rounded cursor-pointer flex items-center gap-1 transition-colors group-hover:border-slate-350" onclick="event.stopPropagation(); openPageSettings('${page.id}')" title="Page settings">
-          <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
-          Modify Page Size
-        </button>
-      </div>
 
-      <!-- Add comments block visually if exists -->
-      ${commentHtml}
+        <!-- Space details & Configure trigger Row -->
+        <div class="text-[8.5px] text-slate-400 flex justify-between items-center gap-1 font-mono mb-1.5">
+          <span class="truncate" title="${pageW} &times; ${pageH} mm">${pageW}&times;${pageH}</span>
+          <button class="p-0.5 px-1 hover:bg-slate-50 text-[8px] hover:text-slate-800 text-slate-500 border border-slate-200/80 rounded cursor-pointer flex items-center gap-0.5" onclick="event.stopPropagation(); openPageSettings('${page.id}')" title="Modify Page Size">
+            ⚙️ Size
+          </button>
+        </div>
 
-      <!-- Quick scheduling transfer list widget -->
-      <div class="mt-auto pt-2 border-t border-slate-100 bg-slate-50/60 p-2 rounded-lg border border-slate-200/40">
-        <h4 class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Scheduled Advt</h4>
-        ${adListHtml}
-      </div>
-    `;
+        <!-- Add comments block visually if exists -->
+        ${commentHtml}
+
+        <!-- Quick scheduling transfer list widget -->
+        <div class="mt-auto pt-1.5 border-t border-slate-100 bg-slate-50/60 p-1.5 rounded border border-slate-200/40">
+          <h4 class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">Scheduled (${page.ads.length})</h4>
+          ${adListHtml}
+        </div>
+      `;
+    } else {
+      pageCard.innerHTML = `
+        <!-- Card Title -->
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">Page ${page.pageNumber}</span>
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs ${posBadgeClass}">${pagePosition}</span>
+          </div>
+          <span class="text-[10px] font-mono font-bold text-slate-500 bg-slate-100/60 px-1.5 py-0.5 rounded border border-slate-200/40">Broad Sheet</span>
+        </div>
+
+        <!-- Thumbnail Wrapper with hover editors overlays -->
+        <div class="relative mx-auto rounded bg-slate-50 border border-slate-200 overflow-hidden flex flex-col items-center justify-end pb-3 shadow-inner mb-3 cursor-pointer group-hover:shadow-blue-500/5 transition-shadow" style="width: 180px; height: 287px;" onclick="openPageEditor('${page.id}')">
+          <!-- Perfectly-centered crisp thumbnail with visible borders on all sides -->
+          <div class="relative border border-slate-950 bg-white overflow-hidden shadow-md" style="width: ${thumbW}px; height: ${thumbH}px;">
+            <!-- 8-Column dashed guidelines -->
+            ${thumbColLinesHtml}
+            ${miniEmptySpacesHtml}
+            ${miniAdsHtml}
+          </div>
+          
+          <!-- Hover visual overlay layout buttons -->
+          <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2.5 transition-opacity duration-150 rounded">
+            <button class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-[11px] font-bold text-white shadow-lg shadow-blue-600/20 flex items-center gap-1.5 transition-transform scale-90 group-hover:scale-100 cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+              Edit Layout
+            </button>
+            <div class="flex gap-1 box-border">
+              <button class="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-100 font-medium cursor-pointer" onclick="event.stopPropagation(); duplicatePageLayout('${page.id}')" title="Duplicate physical page and active ads">Duplicate</button>
+              <button class="p-1 px-2.5 bg-red-700 hover:bg-red-800 rounded text-[10px] text-white font-medium cursor-pointer" onclick="event.stopPropagation(); deletePageLayout('${page.id}')" title="Delete page permanently">Delete</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail elements summary row -->
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-mono mb-1.5">
+          <span class="flex items-center gap-1">
+            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            ${page.ads.length} Advertisements
+          </span>
+          <span class="${pagePercentOccupied > 70 ? 'text-rose-600 font-bold' : pagePercentOccupied > 40 ? 'text-amber-600 font-semibold' : 'text-blue-600 font-semibold'}">
+            ${pagePercentOccupied}% Advt Space Filled
+          </span>
+        </div>
+
+        <!-- Space details & Configure trigger Row -->
+        <div class="text-[10px] text-slate-400 flex justify-between items-center gap-1 font-mono mb-2">
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="bg-slate-100/70 px-1 py-0.5 rounded border border-slate-200/40 font-semibold" title="Dimensions">${pageW} &times; ${pageH} mm</span>
+            <span class="bg-blue-50/80 text-blue-700 px-1 py-0.5 rounded border border-blue-200/30 font-bold" title="Total Page Volume">${((pageW * pageH) / 100).toLocaleString(undefined, { maximumFractionDigits: 1 })} Sqcm</span>
+          </div>
+          <button class="p-1 px-1.5 hover:bg-slate-50 text-[9px] hover:text-slate-800 text-slate-500 border border-slate-200/80 rounded cursor-pointer flex items-center gap-1 transition-colors group-hover:border-slate-350" onclick="event.stopPropagation(); openPageSettings('${page.id}')" title="Page settings">
+            <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+            Modify Page Size
+          </button>
+        </div>
+
+        <!-- Add comments block visually if exists -->
+        ${commentHtml}
+
+        <!-- Quick scheduling transfer list widget -->
+        <div class="mt-auto pt-2 border-t border-slate-100 bg-slate-50/60 p-2 rounded-lg border border-slate-200/40">
+          <h4 class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Scheduled Advt</h4>
+          ${adListHtml}
+        </div>
+      `;
+    }
 
     grid.appendChild(pageCard);
   });
@@ -1026,6 +1220,7 @@ function calculatePageFillPercentage(pageId) {
   let filledArea = 0;
 
   page.ads.forEach(ad => {
+    if (ad.isMasthead) return; // Masthead is edit space, not ad volume
     filledArea += ad.width * ad.height;
   });
 
@@ -1431,6 +1626,7 @@ function duplicatePageLayout(pageId) {
   const newPage = {
     id: "page-" + Date.now(),
     pageNumber: newNum,
+    position: originalPage.position,
     width: originalPage.width || 329,
     height: originalPage.height || 525,
     comments: originalPage.comments || "",
@@ -1467,7 +1663,9 @@ function deletePageLayout(pageId) {
       commitHistory();
       renderAllLayouts();
       showToast(`Page deleted permanently`, "success");
-    }
+    },
+    "Delete Page",
+    "red"
   );
 }
 
@@ -1492,7 +1690,9 @@ function triggerResetAll() {
       renderAllLayouts();
       saveLayoutsToLocalStorageSilently();
       showToast("Planner database reset successfully", "success");
-    }
+    },
+    "Yes, Reset All",
+    "red"
   );
 }
 
@@ -1598,6 +1798,7 @@ function calculatePageAdArea(page) {
   let filledArea = 0;
   if (page && page.ads) {
     page.ads.forEach(ad => {
+      if (ad.isMasthead) return; // Masthead is edit space, not ad volume
       filledArea += (ad.width || 0) * (ad.height || 0);
     });
   }
@@ -1954,11 +2155,21 @@ function renderActiveEditorBoard() {
   const pageH = page.height || 525;
   const totalArea = pageW * pageH;
   let filledArea = 0;
-  page.ads.forEach(ad => filledArea += ad.width * ad.height);
+  let adCount = 0;
+  let mastheadCount = 0;
+  page.ads.forEach(ad => {
+    if (ad.isMasthead) {
+      mastheadCount++;
+    } else {
+      filledArea += ad.width * ad.height;
+      adCount++;
+    }
+  });
   const fillPercent = Math.round((filledArea / totalArea) * 100);
 
   if (pageStats) {
-    pageStats.textContent = `${page.ads.length} Advt | ${fillPercent}% Advt Space Filled | ${pageW}mm × ${pageH}mm`;
+    const mastheadLabel = mastheadCount > 0 ? ` + ${mastheadCount} Masthead` : '';
+    pageStats.textContent = `${adCount} Advt${mastheadLabel} | ${fillPercent}% Advt Space Filled | ${pageW}mm × ${pageH}mm`;
   }
 
   // Update Side Panel Ads summary calculations
@@ -2001,18 +2212,26 @@ function renderActiveEditorBoard() {
   page.ads.forEach(ad => {
     // Determine category details
     let catHeadline = 'Retail';
-    if (ad.category === 'classified') catHeadline = 'Health Care';
-    if (ad.category === 'editorial') catHeadline = 'Real Estate';
-    if (ad.category === 'political') catHeadline = 'Education';
-    if (ad.category === 'finance') catHeadline = 'B2B';
-    if (ad.category === 'special') catHeadline = ad.customCategoryName || 'Others';
+    if (ad.isMasthead) catHeadline = 'Editorial Masthead';
+    else if (ad.category === 'classified') catHeadline = 'Health Care';
+    else if (ad.category === 'editorial') catHeadline = 'Real Estate';
+    else if (ad.category === 'political') catHeadline = 'Education';
+    else if (ad.category === 'finance') catHeadline = 'B2B';
+    else if (ad.category === 'special') catHeadline = ad.customCategoryName || 'Others';
 
     const tentativeClass = ad.isTentative ? 'ad-box-tentative' : '';
-    const tentativeLabelStr = ad.isTentative ? ' • Tentative' : '';
+    const mastheadClass = ad.isMasthead ? 'ad-box-masthead' : '';
+    
+    let categoryBadgeStr = `${catHeadline}${ad.revenue ? ` • ₹${ad.revenue.toLocaleString()}` : ''}`;
+    if (ad.isMasthead) {
+      categoryBadgeStr = 'Masthead • Edit Space (No Ad Vol)';
+    } else if (ad.isTentative) {
+      categoryBadgeStr += ' • Tentative';
+    }
 
     adsHtml += `
       <div id="${ad.id}" 
-           class="ad-box group absolute rounded border-2 select-none shadow-md overflow-hidden cursor-grab flex flex-col justify-between p-2.5 box-border ad-box-cat-${ad.category} ${tentativeClass}"
+           class="ad-box group absolute rounded border-2 select-none shadow-md overflow-hidden cursor-grab flex flex-col justify-between p-2.5 box-border ad-box-cat-${ad.category} ${tentativeClass} ${mastheadClass}"
            style="left:${ad.x * mmPx}px; top:${ad.y * mmPx}px; width:${ad.width * mmPx}px; height:${ad.height * mmPx}px; z-index: 20;"
            data-ad-id="${ad.id}">
         
@@ -2026,7 +2245,7 @@ function renderActiveEditorBoard() {
               ${ad.client}
             </h5>
             <span class="text-[8px] font-medium text-slate-500 scale-95 origin-left block mt-0.5">
-              ${catHeadline}${ad.revenue ? ` • ₹${ad.revenue.toLocaleString()}` : ''}${tentativeLabelStr}
+              ${categoryBadgeStr}
             </span>
           </div>
           
@@ -2160,11 +2379,23 @@ function renderLeftSidebarMenuIndex(page) {
     item.className = "p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 hover:border-slate-700 hover:bg-slate-850 cursor-pointer flex justify-between items-center transition-all group/sidebar-item";
     
     let colorText = 'bg-blue-600';
-    if (ad.category === 'classified') colorText = 'bg-emerald-600';
-    if (ad.category === 'editorial') colorText = 'bg-orange-600';
-    if (ad.category === 'political') colorText = 'bg-fuchsia-600';
-    if (ad.category === 'finance') colorText = 'bg-indigo-600';
-    if (ad.category === 'special') colorText = 'bg-purple-600';
+    if (ad.isMasthead) colorText = 'bg-slate-400';
+    else if (ad.category === 'classified') colorText = 'bg-emerald-600';
+    else if (ad.category === 'editorial') colorText = 'bg-orange-600';
+    else if (ad.category === 'political') colorText = 'bg-fuchsia-600';
+    else if (ad.category === 'finance') colorText = 'bg-indigo-600';
+    else if (ad.category === 'special') colorText = 'bg-purple-600';
+
+    let tagBadge = '';
+    if (ad.isMasthead) {
+      tagBadge = '<span class="text-[7.5px] font-sans font-medium text-slate-300 border border-slate-600 bg-slate-800 px-1 py-0.1 rounded flex-shrink-0 select-none">Masthead</span>';
+    } else if (ad.isTentative) {
+      tagBadge = '<span class="text-[7.5px] font-sans font-medium text-rose-400 border border-rose-500/30 bg-rose-950/40 px-1 py-0.1 rounded flex-shrink-0 select-none">Tentative</span>';
+    }
+
+    const itemMetrics = ad.isMasthead 
+      ? `${ad.width} &times; ${ad.height} mm &bull; Edit Space` 
+      : `${ad.width} &times; ${ad.height} mm${ad.revenue ? ` &bull; ₹${ad.revenue.toLocaleString()}` : ''}`;
 
     item.innerHTML = `
       <div class="overflow-hidden flex items-center gap-2">
@@ -2172,9 +2403,9 @@ function renderLeftSidebarMenuIndex(page) {
         <div class="overflow-hidden min-w-[130px]">
           <h6 class="text-[11px] font-bold text-white leading-tight truncate tracking-tight flex items-center gap-1.5">
             <span class="truncate">${escapeHtml(ad.client)}</span>
-            ${ad.isTentative ? '<span class="text-[7.5px] font-sans font-medium text-rose-400 border border-rose-500/30 bg-rose-950/40 px-1 py-0.1 rounded flex-shrink-0 select-none">Tentative</span>' : ''}
+            ${tagBadge}
           </h6>
-          <span class="text-[9px] font-mono text-slate-500 mt-0.5 block">${ad.width} &times; ${ad.height} mm${ad.revenue ? ` • ₹${ad.revenue.toLocaleString()}` : ''}</span>
+          <span class="text-[9px] font-mono text-slate-500 mt-0.5 block">${itemMetrics}</span>
         </div>
       </div>
       <div class="flex items-center gap-1 opacity-0 group-hover/sidebar-item:opacity-100 transition-opacity">
@@ -2914,6 +3145,9 @@ function triggerEmptySpaceClickForm(mmX, mmY) {
   const tentativeCheck = document.getElementById('form-is-tentative');
   if (tentativeCheck) tentativeCheck.checked = false;
 
+  const mastheadCheck = document.getElementById('form-is-masthead');
+  if (mastheadCheck) mastheadCheck.checked = false;
+
   // Standard category
   selectCategoryThemeRadio('retail');
 
@@ -2945,6 +3179,9 @@ function loadFormAdConfigure(adId) {
 
   const tentativeCheck2 = document.getElementById('form-is-tentative');
   if (tentativeCheck2) tentativeCheck2.checked = ad.isTentative || false;
+
+  const mastheadCheck2 = document.getElementById('form-is-masthead');
+  if (mastheadCheck2) mastheadCheck2.checked = ad.isMasthead || false;
 
   // Set category selector radio visually up to match
   selectCategoryThemeRadio(ad.category || 'retail');
@@ -3006,6 +3243,14 @@ function handleFormAdSubmission(e) {
   const tentativeCheck = document.getElementById('form-is-tentative');
   const isTentative = tentativeCheck ? tentativeCheck.checked : false;
 
+  const mastheadCheck = document.getElementById('form-is-masthead');
+  const isMasthead = mastheadCheck ? mastheadCheck.checked : false;
+
+  let finalClientName = clientName;
+  if (isMasthead && (!finalClientName || finalClientName === "Anonymous Advertiser")) {
+    finalClientName = "Masthead";
+  }
+
   const page = state.pages.find(p => p.id === state.activePageId);
   if (!page) return;
 
@@ -3054,37 +3299,39 @@ function handleFormAdSubmission(e) {
     // MODE: Configure updates
     const adObj = page.ads.find(a => a.id === adId);
     if (adObj) {
-      adObj.client = clientName;
+      adObj.client = finalClientName;
       adObj.width = reqW;
       adObj.height = reqH;
       adObj.x = placementXFinal;
       adObj.y = placementYFinal;
       adObj.category = catTheme;
       adObj.customCategoryName = customCategoryName;
-      adObj.revenue = revenueVal;
-      adObj.isTentative = isTentative;
+      adObj.revenue = isMasthead ? 0 : revenueVal;
+      adObj.isTentative = isMasthead ? false : isTentative;
+      adObj.isMasthead = isMasthead;
       
       applyPageLayoutMutations(page);
-      showToast(`Ad "${clientName}" updated successfully`, "success");
+      showToast(isMasthead ? `Masthead "${finalClientName}" updated (Edit Space)` : `Ad "${finalClientName}" updated successfully`, "success");
     }
   } else {
     // MODE: Create new box
     const newAd = {
       id: "ad-" + Date.now(),
-      client: clientName,
+      client: finalClientName,
       x: placementXFinal,
       y: placementYFinal,
       width: reqW,
       height: reqH,
       category: catTheme,
       customCategoryName: customCategoryName,
-      revenue: revenueVal,
-      isTentative: isTentative
+      revenue: isMasthead ? 0 : revenueVal,
+      isTentative: isMasthead ? false : isTentative,
+      isMasthead: isMasthead
     };
 
     page.ads.push(newAd);
     applyPageLayoutMutations(page);
-    showToast(`Ad "${clientName}" scheduled successfully`, "success");
+    showToast(isMasthead ? `Masthead "${finalClientName}" placed on page (Edit space)` : `Ad "${finalClientName}" scheduled successfully`, "success");
   }
 
   // Close dialogues
@@ -3399,6 +3646,12 @@ function setupEventListeners() {
   const btnResetMain = document.getElementById('btn-reset-main');
   if (btnResetMain) btnResetMain.addEventListener('click', triggerResetAll);
 
+  // Thumbnail View Mode toggles: Big (4/row) & Small (8/row)
+  const btnViewBig = document.getElementById('btn-view-big');
+  const btnViewSmall = document.getElementById('btn-view-small');
+  if (btnViewBig) btnViewBig.addEventListener('click', () => setThumbnailView('big'));
+  if (btnViewSmall) btnViewSmall.addEventListener('click', () => setThumbnailView('small'));
+
   // Zoom bindings
   const btnZoomIn = document.getElementById('btn-zoom-in');
   const btnZoomOut = document.getElementById('btn-zoom-out');
@@ -3430,6 +3683,22 @@ function setupEventListeners() {
 
   const formElement = document.getElementById('ad-modal-form');
   if (formElement) formElement.addEventListener('submit', handleFormAdSubmission);
+
+  const mastheadCheckbox = document.getElementById('form-is-masthead');
+  if (mastheadCheckbox) {
+    mastheadCheckbox.addEventListener('change', () => {
+      const clientInput = document.getElementById('form-client-name');
+      const revenueInput = document.getElementById('form-ad-revenue');
+      const tentativeCheckbox = document.getElementById('form-is-tentative');
+      if (mastheadCheckbox.checked) {
+        if (!clientInput.value || clientInput.value.trim() === '' || clientInput.value === 'Anonymous Advertiser') {
+          clientInput.value = 'Masthead';
+        }
+        if (revenueInput) revenueInput.value = '0';
+        if (tentativeCheckbox) tentativeCheckbox.checked = false;
+      }
+    });
+  }
 
   // Dynamic style updates to the visual category form theme buttons on click
   const categoryLabels = document.querySelectorAll('#category-selector-container label');
@@ -3589,6 +3858,7 @@ async function triggerPageReportPDFExport() {
       sumTotalPageAreaMm2 += pageW * pageH;
       p.ads.forEach(ad => {
         if (ad.category === 'comment') return;
+        if (ad.isMasthead) return; // Masthead is not ad volume or revenue
         sumTotalAdAreaMm2 += ad.width * ad.height;
         sumTotalRevenue += Number(ad.revenue || 0);
       });
@@ -3623,19 +3893,26 @@ async function triggerPageReportPDFExport() {
       } else {
         nonCommentAds.forEach((ad, idx) => {
           let categoryLabel = 'Retail';
-          if (ad.category === 'classified') categoryLabel = 'Health Care';
-          if (ad.category === 'editorial') categoryLabel = 'Real Estate';
-          if (ad.category === 'political') categoryLabel = 'Education';
-          if (ad.category === 'finance') categoryLabel = 'B2B';
-          if (ad.category === 'special') categoryLabel = ad.customCategoryName || 'Others';
+          if (ad.isMasthead) categoryLabel = 'Editorial Masthead';
+          else if (ad.category === 'classified') categoryLabel = 'Health Care';
+          else if (ad.category === 'editorial') categoryLabel = 'Real Estate';
+          else if (ad.category === 'political') categoryLabel = 'Education';
+          else if (ad.category === 'finance') categoryLabel = 'B2B';
+          else if (ad.category === 'special') categoryLabel = ad.customCategoryName || 'Others';
 
-          const singleAdVolume = (ad.width * ad.height) / 100;
-          const adRevenueDisplay = ad.revenue ? `${ad.revenue.toLocaleString()}` : '0';
+          const singleAdVolume = ad.isMasthead ? 0 : (ad.width * ad.height) / 100;
+          const adRevenueDisplay = ad.isMasthead ? '0 (Edit)' : (ad.revenue ? `${ad.revenue.toLocaleString()}` : '0');
 
-          const rowBgColor = ad.isTentative ? '#fef2f2' : '#ffffff';
-          const nameLabelHtml = ad.isTentative
-            ? `${escapeHtml(ad.client)} <span style="font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 6.5px; font-weight: bold; color: #dc2626; border: 0.35px solid #fca5a5; background-color: #fee2e2; padding: 1px 3px; border-radius: 2px; margin-left: 4px; display: inline-block; vertical-align: middle;">TENTATIVE</span>`
-            : escapeHtml(ad.client);
+          let rowBgColor = '#ffffff';
+          if (ad.isTentative) rowBgColor = '#fef2f2';
+          else if (ad.isMasthead) rowBgColor = '#f1f5f9';
+
+          let nameLabelHtml = escapeHtml(ad.client);
+          if (ad.isMasthead) {
+            nameLabelHtml = `${escapeHtml(ad.client)} <span style="font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 6.5px; font-weight: bold; color: #334155; border: 0.35px solid #94a3b8; background-color: #e2e8f0; padding: 1px 3px; border-radius: 2px; margin-left: 4px; display: inline-block; vertical-align: middle;">MASTHEAD (EDIT)</span>`;
+          } else if (ad.isTentative) {
+            nameLabelHtml = `${escapeHtml(ad.client)} <span style="font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 6.5px; font-weight: bold; color: #dc2626; border: 0.35px solid #fca5a5; background-color: #fee2e2; padding: 1px 3px; border-radius: 2px; margin-left: 4px; display: inline-block; vertical-align: middle;">TENTATIVE</span>`;
+          }
 
           tableRows.push(`
             <tr style="border-bottom: 1px solid #cbd5e1; background-color: ${rowBgColor};">
@@ -3781,17 +4058,26 @@ async function triggerPageReportPDFExport() {
             return;
           }
 
-          const adBg = ad.isTentative ? '#fee2e2' : '#f8fafc';
-          const adBorder = ad.isTentative ? '0.4px solid rgba(239, 68, 68, 0.5)' : '0.4px solid rgba(0, 0, 0, 0.25)';
-          const adTextColor = ad.isTentative ? '#991b1b' : '#1e293b';
-          const nameLabel = ad.isTentative ? `${escapeHtml(ad.client)} [T]` : escapeHtml(ad.client);
+          let adBg = ad.isTentative ? '#fee2e2' : '#f8fafc';
+          let adBorder = ad.isTentative ? '0.4px solid rgba(239, 68, 68, 0.5)' : '0.4px solid rgba(0, 0, 0, 0.25)';
+          let adTextColor = ad.isTentative ? '#991b1b' : '#1e293b';
+          let nameLabel = ad.isTentative ? `${escapeHtml(ad.client)} [T]` : escapeHtml(ad.client);
+          let dimTextColor = '#64748b';
+
+          if (ad.isMasthead) {
+            adBg = '#334155'; // Dark slate gray
+            adBorder = '0.4px solid #0f172a';
+            adTextColor = '#f8fafc';
+            dimTextColor = '#cbd5e1';
+            nameLabel = `${escapeHtml(ad.client)} [MASTHEAD]`;
+          }
 
           miniAds += `
             <div style="position: absolute; left: ${ad.x * scaleX}px; top: ${ad.y * scaleY}px; width: ${ad.width * scaleX}px; height: ${ad.height * scaleY}px; background-color: ${adBg}; border: ${adBorder}; border-radius: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; padding: 2px; text-align: center; line-height: 1.15; z-index: 5;">
               <span style="font-family: 'Arial Narrow', 'sans-serif-condensed', ui-sans-serif, system-ui, sans-serif; font-size: 5.5px; font-weight: 500; color: ${adTextColor}; max-width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 ${nameLabel}
               </span>
-              <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 4px; font-weight: 500; color: #64748b; display: block; margin-top: 1px; white-space: nowrap;">
+              <span style="font-family: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro', 'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace; font-size: 4px; font-weight: 500; color: ${dimTextColor}; display: block; margin-top: 1px; white-space: nowrap;">
                 ${ad.width}x${ad.height}
               </span>
             </div>
@@ -3803,7 +4089,18 @@ async function triggerPageReportPDFExport() {
         const fillPercent = calculatePageFillPercentage(page.id);
 
         const pagePosition = page.position || (page.pageNumber % 2 === 0 ? "LEFT" : "RIGHT");
-        const posColor = pagePosition === 'LEFT' ? '#4338ca' : '#7e22ce'; // indigo-700 / purple-700
+        let posColor = '#7e22ce'; // purple-700
+        if (pagePosition === 'LEFT') {
+          posColor = '#4338ca'; // indigo-700
+        } else if (pagePosition === 'RIGHT') {
+          posColor = '#7e22ce'; // purple-700
+        } else if (pagePosition === 'Front Page') {
+          posColor = '#be123c'; // rose-700
+        } else if (pagePosition.includes('Jacket 1')) {
+          posColor = '#b45309'; // amber-700
+        } else if (pagePosition.includes('Jacket 2')) {
+          posColor = '#047857'; // emerald-700
+        }
 
         overviewHtml += `
           <div style="background-color: #fafbfb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 6px; display: flex; flex-direction: column; align-items: center; width: 108px; box-sizing: border-box;">
@@ -4052,27 +4349,36 @@ function showToast(message, type = "success") {
 
 let activeConfirmProceedAction = null;
 
-function showConfirmDialog(title, text, proceedCallback) {
+function showConfirmDialog(title, text, proceedCallback, confirmBtnText = "Confirm", theme = "red") {
   const modal = document.getElementById('confirm-modal');
   if (!modal) return;
 
   document.getElementById('confirm-title').textContent = title.toUpperCase();
   document.getElementById('confirm-message').textContent = text;
   
+  const proceedBtn = document.getElementById('btn-confirm-proceed');
+  if (proceedBtn) {
+    proceedBtn.textContent = confirmBtnText || 'Confirm';
+    if (theme === 'red') {
+      proceedBtn.className = "flex-1 py-2.5 bg-red-600 hover:bg-red-700 rounded-lg text-white font-semibold transition cursor-pointer shadow-sm text-center";
+    } else {
+      proceedBtn.className = "flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold transition cursor-pointer shadow-sm text-center";
+    }
+  }
+
   activeConfirmProceedAction = proceedCallback;
 
   modal.classList.remove('hidden');
 
   // Set cancel/close listeners
   const cancelBtn = document.getElementById('btn-confirm-cancel');
-  const proceedBtn = document.getElementById('btn-confirm-proceed');
 
   // Fresh hooks
   const closeRoutineConfirm = () => {
     modal.classList.add('hidden');
     activeConfirmProceedAction = null;
-    cancelBtn.removeEventListener('click', closeRoutineConfirm);
-    proceedBtn.removeEventListener('click', proceedRoutineConfirm);
+    if (cancelBtn) cancelBtn.removeEventListener('click', closeRoutineConfirm);
+    if (proceedBtn) proceedBtn.removeEventListener('click', proceedRoutineConfirm);
   };
 
   const proceedRoutineConfirm = () => {
@@ -4080,8 +4386,8 @@ function showConfirmDialog(title, text, proceedCallback) {
     closeRoutineConfirm();
   };
 
-  cancelBtn.addEventListener('click', closeRoutineConfirm);
-  proceedBtn.addEventListener('click', proceedRoutineConfirm);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeRoutineConfirm);
+  if (proceedBtn) proceedBtn.addEventListener('click', proceedRoutineConfirm);
 }
 
 function triggerDirectSwap(adId) {

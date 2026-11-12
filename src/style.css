@@ -137,6 +137,32 @@ body {
   background-color: #f43f5e !important;
 }
 
+/* Masthead (Dark Gray Editorial Space) override */
+.ad-box.ad-box-masthead {
+  border-color: #1e293b !important;
+  background-color: #334155 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.3), 0 2px 4px -2px rgba(15, 23, 42, 0.3);
+}
+.ad-box.ad-box-masthead:hover {
+  background-color: #1e293b !important;
+  border-color: #0f172a !important;
+}
+.ad-box.ad-box-masthead .cat-accent {
+  background-color: #0f172a !important;
+}
+.ad-box.ad-box-masthead h5 {
+  color: #ffffff !important;
+}
+.ad-box.ad-box-masthead span {
+  color: #cbd5e1 !important;
+}
+.ad-box.ad-box-masthead .info-dimensions {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+
 /* Drag State Clones and Visual Feedback */
 .ad-box-dragging {
   cursor: grabbing !important;
