@@ -932,10 +932,10 @@ function renderAllLayouts() {
       if (ad.category === 'finance') catColor = '#4f46e5';
       if (ad.category === 'special') catColor = '#9333ea';
 
-      let bgStyle = `background-color:${catColor}14; border-color:${catColor};`;
-      let clientTextColor = '#1e293b';
+      let bgStyle = `background-color:${catColor}2e; border-color:${catColor};`;
+      let clientTextColor = '#0f172a';
       if (ad.isTentative) {
-        bgStyle = `background-color:#fee2e2; border-color:#f43f5e;`;
+        bgStyle = `background-color:#fecaca; border-color:#e11d48;`;
       }
       if (ad.isMasthead) {
         bgStyle = `background-color:#334155; border-color:#0f172a;`;
@@ -1067,6 +1067,8 @@ function renderAllLayouts() {
       posBadgeClass = 'bg-purple-50 text-purple-700 border border-purple-200';
     } else if (pagePosition === 'Front Page') {
       posBadgeClass = 'bg-rose-50 text-rose-700 border border-rose-300 font-semibold';
+    } else if (pagePosition === 'Back Page') {
+      posBadgeClass = 'bg-sky-50 text-sky-700 border border-sky-300 font-semibold';
     } else if (pagePosition.includes('Jacket 1')) {
       posBadgeClass = 'bg-amber-50 text-amber-800 border border-amber-300 font-semibold';
     } else if (pagePosition.includes('Jacket 2')) {
@@ -4058,15 +4060,23 @@ async function triggerPageReportPDFExport() {
             return;
           }
 
-          let adBg = ad.isTentative ? '#fee2e2' : '#f8fafc';
-          let adBorder = ad.isTentative ? '0.4px solid rgba(239, 68, 68, 0.5)' : '0.4px solid rgba(0, 0, 0, 0.25)';
-          let adTextColor = ad.isTentative ? '#991b1b' : '#1e293b';
+          let catRgb = '37, 99, 235'; // retail blue
+          let catHex = '#2563eb';
+          if (ad.category === 'classified') { catRgb = '5, 150, 105'; catHex = '#059669'; }
+          else if (ad.category === 'editorial') { catRgb = '234, 88, 12'; catHex = '#ea580c'; }
+          else if (ad.category === 'political') { catRgb = '192, 38, 211'; catHex = '#c026d3'; }
+          else if (ad.category === 'finance') { catRgb = '79, 70, 229'; catHex = '#4f46e5'; }
+          else if (ad.category === 'special') { catRgb = '147, 51, 234'; catHex = '#9333ea'; }
+
+          let adBg = ad.isTentative ? '#fecaca' : `rgba(${catRgb}, 0.22)`;
+          let adBorder = ad.isTentative ? '0.6px solid rgba(220, 38, 38, 0.75)' : `0.6px solid ${catHex}`;
+          let adTextColor = ad.isTentative ? '#7f1d1d' : '#0f172a';
           let nameLabel = ad.isTentative ? `${escapeHtml(ad.client)} [T]` : escapeHtml(ad.client);
-          let dimTextColor = '#64748b';
+          let dimTextColor = ad.isTentative ? '#991b1b' : '#334155';
 
           if (ad.isMasthead) {
             adBg = '#334155'; // Dark slate gray
-            adBorder = '0.4px solid #0f172a';
+            adBorder = '0.6px solid #0f172a';
             adTextColor = '#f8fafc';
             dimTextColor = '#cbd5e1';
             nameLabel = `${escapeHtml(ad.client)} [MASTHEAD]`;
@@ -4096,6 +4106,8 @@ async function triggerPageReportPDFExport() {
           posColor = '#7e22ce'; // purple-700
         } else if (pagePosition === 'Front Page') {
           posColor = '#be123c'; // rose-700
+        } else if (pagePosition === 'Back Page') {
+          posColor = '#0369a1'; // sky-700
         } else if (pagePosition.includes('Jacket 1')) {
           posColor = '#b45309'; // amber-700
         } else if (pagePosition.includes('Jacket 2')) {

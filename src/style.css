@@ -61,10 +61,10 @@ body {
 /* Highlight themes on Ad Boxes based on selected category */
 .ad-box-cat-retail {
   border-color: #2563eb;
-  background-color: rgba(37, 99, 235, 0.08);
+  background-color: rgba(37, 99, 235, 0.15);
 }
 .ad-box-cat-retail:hover {
-  background-color: rgba(37, 99, 235, 0.12);
+  background-color: rgba(37, 99, 235, 0.22);
 }
 .ad-box-cat-retail .cat-accent {
   background-color: #2563eb;
@@ -72,10 +72,10 @@ body {
 
 .ad-box-cat-classified {
   border-color: #059669;
-  background-color: rgba(5, 150, 105, 0.08);
+  background-color: rgba(5, 150, 105, 0.15);
 }
 .ad-box-cat-classified:hover {
-  background-color: rgba(5, 150, 105, 0.12);
+  background-color: rgba(5, 150, 105, 0.22);
 }
 .ad-box-cat-classified .cat-accent {
   background-color: #059669;
@@ -83,10 +83,10 @@ body {
 
 .ad-box-cat-editorial {
   border-color: #ea580c;
-  background-color: rgba(234, 88, 12, 0.08);
+  background-color: rgba(234, 88, 12, 0.15);
 }
 .ad-box-cat-editorial:hover {
-  background-color: rgba(234, 88, 12, 0.12);
+  background-color: rgba(234, 88, 12, 0.22);
 }
 .ad-box-cat-editorial .cat-accent {
   background-color: #ea580c;
@@ -94,10 +94,10 @@ body {
 
 .ad-box-cat-political {
   border-color: #c026d3;
-  background-color: rgba(192, 38, 211, 0.08);
+  background-color: rgba(192, 38, 211, 0.15);
 }
 .ad-box-cat-political:hover {
-  background-color: rgba(192, 38, 211, 0.12);
+  background-color: rgba(192, 38, 211, 0.22);
 }
 .ad-box-cat-political .cat-accent {
   background-color: #c026d3;
@@ -105,10 +105,10 @@ body {
 
 .ad-box-cat-finance {
   border-color: #4f46e5;
-  background-color: rgba(79, 70, 229, 0.08);
+  background-color: rgba(79, 70, 229, 0.15);
 }
 .ad-box-cat-finance:hover {
-  background-color: rgba(79, 70, 229, 0.12);
+  background-color: rgba(79, 70, 229, 0.22);
 }
 .ad-box-cat-finance .cat-accent {
   background-color: #4f46e5;
@@ -116,10 +116,10 @@ body {
 
 .ad-box-cat-special {
   border-color: #9333ea;
-  background-color: rgba(147, 51, 234, 0.08);
+  background-color: rgba(147, 51, 234, 0.15);
 }
 .ad-box-cat-special:hover {
-  background-color: rgba(147, 51, 234, 0.12);
+  background-color: rgba(147, 51, 234, 0.22);
 }
 .ad-box-cat-special .cat-accent {
   background-color: #9333ea;
@@ -128,10 +128,10 @@ body {
 /* Tentative Ad Styling override */
 .ad-box.ad-box-tentative {
   border-color: #f43f5e !important;
-  background-color: #fef2f2 !important;
+  background-color: #fecaca !important;
 }
 .ad-box.ad-box-tentative:hover {
-  background-color: #fee2e2 !important;
+  background-color: #fca5a5 !important;
 }
 .ad-box.ad-box-tentative .cat-accent {
   background-color: #f43f5e !important;
